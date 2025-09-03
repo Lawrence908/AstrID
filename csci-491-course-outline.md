@@ -1,17 +1,17 @@
 # CSCI 491 Senior Research Project Outline
 
-**Student:** Chris Lawrence
-**Project Title:** Astronomical Identification: Anomaly Detection and Visualization
-**Supervisor:** Prof. Luis Meneses
-**Committee members:** Prof. Gregory Arkos
-**Proposal:** CSCI 491 Senior Research Project (6 credits)
-**Duration:** September 2, 2025 through April 30, 2026
+**Student:** Chris Lawrence  
+**Project Title:** Astronomical Identification: Anomaly Detection and Visualization  
+**Supervisor:** Prof. Luis Meneses  
+**Committee members:** Prof. Gregory Arkos  
+**Proposal:** CSCI 491 Senior Research Project (6 credits)  
+**Duration:** September 2025 – April 2026 
 
 ---
 
 ## Topic Outline
 
-The AstrID project was developed as a system for identifying stars in astronomical images using FITS data and a U-Net machine learning model, developed for a CSCI 478 course in F24 semester. This existing system can successfully localize and classify stars with reasonable accuracy, serving as a foundation for further research.
+The AstrID project was developed as a system for identifying stars in astronomical images using FITS data and a U-Net machine learning model, developed for a CSCI 478 course in F24 semester. This existing system can successfully localize and identify stars with reasonable accuracy, serving as a foundation for further research.
 
 This project will extend AstrID in two key ways:
 
@@ -83,25 +83,25 @@ At each meeting, the student will provide a short (10-15 minute) briefing on the
 
 | Date | Deliverable |
 |------|-------------|
-| Sept 2-16 | Finalize proposal and registration form; project kickoff; environment setup |
-| Mid Sept | Literature review on anomaly detection in astronomy/ML; initial research log |
+| Sept16 | Finalize proposal and registration form; project kickoff; environment setup |
+| Sept | Literature review on anomaly detection in astronomy/ML; initial research log |
 | Oct | Dataset preparation (temporal FITS images); design baseline anomaly detection pipeline |
-| Nov | Implement baseline anomaly detection model; preliminary evaluation; begin dashboard framework |
+| Nov | Implement baseline anomaly detection model; preliminary evaluation; begin dashboard |
 | Dec | Prototype anomaly detection pipeline with early visualization; progress presentation |
 
 ### Spring 2026 Project Schedule:
 
 | Date | Deliverable |
 |------|-------------|
-| By Jan 15 | Draft project proposal and presentation to supervisor (rehearsal) |
-| By Jan 30 | Project proposal presentation and defense to committee (baseline results, pipeline, dashboard prototype) |
+| Jan15 | Draft project proposal and presentation to supervisor (rehearsal) |
+| Jan30 | Proposal presentation and defense (baseline results, pipeline, dashboard prototype) |
 | Feb | Refine ML models (temporal/attention methods, hyperparameter tuning); second research log |
-| March | Expand dashboard with anomaly overlays, confidence scoring, anomaly history; deploy beta version publicly |
-| By April 8 | Draft final report submitted to supervisor |
-| By April 15 | Revised final report submitted to supervisor |
-| By April 23 | Defense version submitted to committee; rehearsal presentation to supervisor |
-| By April 30 | Final project presentation and oral examination to committee and public |
-| By May 30 | Final approved version accepted by all committee members |
+| Mar | Expand dashboard with anomaly overlays, confidence scores, anomaly history; deploy beta |
+| Apr8 | Draft final report submitted to supervisor |
+| Apr15 | Revised final report submitted to supervisor |
+| Apr23 | Defense version submitted to committee; rehearsal presentation to supervisor |
+| Apr30 | Final project presentation and oral examination to committee and public |
+| May30 | Final approved version accepted by all committee members |
 
 ---
 
