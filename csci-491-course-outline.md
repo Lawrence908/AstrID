@@ -11,7 +11,7 @@
 
 ## Topic Outline
 
-The AstrID project was developed as a system for identifying stars in astronomical images using FITS data and a U-Net machine learning model, developed for a CSCI 478 course in F24 semester. This existing system can successfully localize and identify stars with reasonable accuracy, serving as a foundation for further research.
+The AstrID project was partially developed as a prototype for identifying stars in astronomical images using FITS data and a U-Net machine learning model, developed for a CSCI 478 course in F24 semester. This existing system can successfully localize and identify stars with reasonable accuracy, serving as a foundation for further research.
 
 This project will extend AstrID in two key ways:
 
@@ -24,7 +24,7 @@ This builds directly on the completed AstrID framework while introducing new mac
 
 ## Project Description
 
-The project will employ a systematic approach combining machine learning research, software development, and astronomical data analysis to achieve the stated objectives.
+The project will allow me to learn and utilize a systematic approach combining machine learning research, software development, and astronomical data analysis to achieve the stated objectives. A course that combines these learning outcomes is not offered at VIU, which is why I am proposing them as a Senior Research Project. Also, the skills that I will learn are very sought after in today's industry.
 
 **Core Research Components:**
 
