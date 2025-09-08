@@ -10,8 +10,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only what's needed for package installation
+# Copy package files needed for installation
 COPY pyproject.toml ./
+COPY README.md ./
+COPY src/ ./src/
 
 # Install dependencies
 RUN pip install --no-cache-dir uv && \
@@ -52,12 +54,9 @@ RUN chown -R astrid:astrid /app
 # Switch to non-root user
 USER astrid
 
-# Expose port
-EXPOSE 8000
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import redis; redis.Redis.from_url('$REDIS_URL').ping()" || exit 1
 
-# Run the application
-CMD ["uvicorn", "src.adapters.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Default command (can be overridden in docker-compose)
+CMD ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]

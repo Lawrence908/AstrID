@@ -33,15 +33,6 @@ uv pip install --dev .
 echo "🔧 Setting up pre-commit hooks..."
 pre-commit install
 
-# Create .env file if it doesn't exist
-if [ ! -f .env ]; then
-    echo "📝 Creating .env file from template..."
-    cp env.example .env
-    echo "⚠️  Please edit .env with your configuration values"
-else
-    echo "✅ .env file already exists"
-fi
-
 # Check Docker availability
 if command -v docker &> /dev/null && command -v docker-compose &> /dev/null; then
     echo "✅ Docker and Docker Compose are available"

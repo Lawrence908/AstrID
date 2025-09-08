@@ -6,7 +6,7 @@
 set -e
 
 PROJECT_NAME="astrid-dev"
-COMPOSE_FILE="docker/docker-compose.yml"
+COMPOSE_FILE="docker-compose.yaml"
 
 # Colors for output
 RED='\033[0;31m'
@@ -16,15 +16,6 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Starting AstrID Development Environment${NC}"
-
-# Check if .env file exists
-if [ ! -f ".env" ]; then
-    echo -e "${YELLOW}⚠️  .env file not found. Copying from env.example...${NC}"
-    cp env.example .env
-    echo -e "${YELLOW}📝 Please edit .env file with your actual values before continuing.${NC}"
-    echo -e "${YELLOW}   Press Enter when ready, or Ctrl+C to exit and configure .env${NC}"
-    read
-fi
 
 # Handle command line arguments
 BUILD_FLAG=""
@@ -91,7 +82,6 @@ check_service_health() {
 }
 
 # Check critical services
-check_service_health "postgres"
 check_service_health "redis"
 check_service_health "mlflow"
 
@@ -101,7 +91,7 @@ echo -e "${BLUE}📋 Service URLs:${NC}"
 echo -e "   API:          http://localhost:8000"
 echo -e "   MLflow:       http://localhost:5000"
 echo -e "   Prefect:      http://localhost:4200"
-echo -e "   PostgreSQL:   localhost:5432"
+echo -e "   PostgreSQL:   Supabase (remote)"
 echo -e "   Redis:        localhost:6379"
 echo ""
 echo -e "${BLUE}🔧 Useful commands:${NC}"

@@ -54,7 +54,6 @@ This directory contains the Docker configuration for AstrID development environm
 
 ### ✅ **Fixed Inconsistencies:**
 
-- Fixed `APP_ENV` vs `ENVIRONMENT` mismatch in `env.example`
 - Consistent database URLs between compose and constants
 - Proper Redis password handling
 - Added missing `PYTHONPATH` and `DEBUG` environment variables
@@ -78,18 +77,7 @@ This directory contains the Docker configuration for AstrID development environm
 
 ## Environment Configuration
 
-1. Copy `env.example` to `.env`:
-   ```bash
-   cp env.example .env
-   ```
-
-2. Edit `.env` with your actual values:
-   - Supabase credentials
-   - Cloudflare R2 credentials
-   - Redis password
-   - Other service configurations
-
-3. Start the environment:
+1. Start the environment:
    ```bash
    ./docker/start-dev.sh
    ```

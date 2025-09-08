@@ -33,12 +33,6 @@
    pre-commit install
    ```
 
-5. **Environment Configuration**
-   ```bash
-   cp env.example .env
-   # Edit .env with your configuration
-   ```
-
 ### Development Services
 
 Start the development environment:

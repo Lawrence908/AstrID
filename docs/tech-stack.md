@@ -182,7 +182,6 @@ astrid/
   docker/
     api.Dockerfile worker.Dockerfile prefect.Dockerfile compose.yml
   .github/workflows/ci.yml
-  .env.example
   README.md
 ```
 
