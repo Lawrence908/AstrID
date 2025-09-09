@@ -7,10 +7,10 @@ set -e
 
 echo "🚀 Setting up AstrID development environment..."
 
-# Check if Python 3.11+ is available
+# Check if Python 3.12.3+ is available
 python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-if [[ $(echo "$python_version >= 3.11" | bc -l) -eq 0 ]]; then
-    echo "❌ Python 3.11+ is required. Current version: $python_version"
+if [[ $(echo "$python_version >= 3.12.3" | bc -l) -eq 0 ]]; then
+    echo "❌ Python 3.12.3+ is required. Current version: $python_version"
     exit 1
 fi
 

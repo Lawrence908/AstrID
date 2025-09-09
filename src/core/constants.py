@@ -73,6 +73,16 @@ CLOUDFLARE_EU_R2_ENDPOINT_URL = os.getenv("CLOUDFLARE_EU_R2_ENDPOINT_URL")
 MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models")
 MLFLOW_S3_ENDPOINT_URL = os.getenv("MLFLOW_S3_ENDPOINT_URL")
 
+# MLflow Supabase Configuration
+MLFLOW_SUPABASE_URL = os.getenv("MLFLOW_SUPABASE_URL")
+MLFLOW_SUPABASE_PROJECT_REF = os.getenv("MLFLOW_SUPABASE_PROJECT_REF")
+MLFLOW_SUPABASE_PASSWORD = os.getenv("MLFLOW_SUPABASE_PASSWORD")
+MLFLOW_SUPABASE_HOST = os.getenv("MLFLOW_SUPABASE_HOST")
+MLFLOW_SUPABASE_SSL_CERT_PATH = os.getenv("MLFLOW_SUPABASE_SSL_CERT_PATH")
+MLFLOW_SUPABASE_KEY = os.getenv("MLFLOW_SUPABASE_KEY")
+MLFLOW_SUPABASE_SERVICE_ROLE_KEY = os.getenv("MLFLOW_SUPABASE_SERVICE_ROLE_KEY")
+MLFLOW_SUPABASE_JWT_SECRET = os.getenv("MLFLOW_SUPABASE_JWT_SECRET")
+
 # DVC Configuration
 DVC_REMOTE_NAME = os.getenv("DVC_REMOTE_NAME", "r2")
 DVC_REMOTE_URL = os.getenv("DVC_REMOTE_URL", "s3://astrid-data")
@@ -122,6 +132,27 @@ DB_CONFIG = {
     "echo": DEBUG,  # Enable echo in debug mode
 }
 
+# MLflow Database connection settings
+MLFLOW_DB_CONFIG = {
+    "host": MLFLOW_SUPABASE_HOST or "aws-0-us-west-1.pooler.supabase.com:5432",
+    "database": "postgres",
+    "user": f"postgres.{MLFLOW_SUPABASE_PROJECT_REF}"
+    if MLFLOW_SUPABASE_PROJECT_REF
+    else "postgres",
+    "password": MLFLOW_SUPABASE_PASSWORD,
+    "ssl": "require",
+    "ssl_cert_path": MLFLOW_SUPABASE_SSL_CERT_PATH,
+    # Connection pool settings
+    "pool_size": pool_config["pool_size"],
+    "max_overflow": pool_config["max_overflow"],
+    "pool_timeout": 30,  # Seconds to wait for a connection from pool
+    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_pre_ping": True,  # Verify connections before use
+    # Query timeout settings
+    "command_timeout": 60,  # Default timeout for queries in seconds
+    "echo": DEBUG,  # Enable echo in debug mode
+}
+
 
 def get_database_url() -> str:
     """Get the database URL."""
@@ -136,8 +167,8 @@ def get_mlflow_tracking_uri() -> str:
     """Get the MLflow tracking URI."""
     return (
         f"postgresql+asyncpg://"
-        f"{DB_CONFIG['user']}:{DB_CONFIG['password']}@"
-        f"{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+        f"{MLFLOW_DB_CONFIG['user']}:{MLFLOW_DB_CONFIG['password']}@"
+        f"{MLFLOW_DB_CONFIG['host']}/{MLFLOW_DB_CONFIG['database']}"
     )
 
 

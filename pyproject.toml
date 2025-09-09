@@ -60,6 +60,13 @@ dependencies = [
     "tensorflow==2.20.0",
     "keras==3.11.3",
 
+    # Authentication
+    "supabase>=2.0.0",
+    "pyjwt>=2.8.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "email-validator>=2.0.0",
+
     # Utilities
     "structlog>=23.2.0",
     "loguru>=0.7.0",

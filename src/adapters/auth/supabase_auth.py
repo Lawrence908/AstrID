@@ -58,78 +58,84 @@ class AuthService:
     async def verify_token(self, token: str) -> dict[str, Any]:
         """Verify JWT token and return payload."""
         try:
+            logger.debug(
+                f"Verifying token: length={len(token)}, starts_with={token[:10]}..."
+            )
+
             if not self.jwt_secret:
+                logger.error("JWT secret not configured")
                 raise ValueError("JWT secret not configured")
 
             payload = jwt.decode(
                 token,
                 self.jwt_secret,
                 algorithms=["HS256"],
-                options={"verify_exp": True},
+                options={
+                    "verify_exp": True,
+                    "verify_aud": False,
+                },  # Disable audience verification
+                audience=None,  # Don't verify audience
+            )
+
+            logger.debug(
+                f"Token verified successfully: user_id={payload.get('sub')}, role={payload.get('role')}"
             )
             return payload  # type: ignore[no-any-return]
-        except jwt.ExpiredSignatureError:
+        except jwt.ExpiredSignatureError as e:
+            logger.warning(f"Token expired: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
             ) from None
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Invalid token: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
             ) from None
 
     async def get_user_from_token(self, token: str) -> User:
         """Get user information from JWT token."""
+        logger.debug(f"Getting user from token: length={len(token)}")
         payload = await self.verify_token(token)
 
         # Extract user info from JWT payload
         user_id = payload.get("sub")
+
         if not user_id:
+            logger.error("No user_id found in token payload")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing user ID",
             )
 
-        # Get user from Supabase
+        # Extract user information directly from JWT payload instead of making API call
         try:
-            response = self.client.auth.admin.get_user_by_id(user_id)
-            if not response.user:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-                )
+            # Get user metadata from JWT payload
+            user_metadata = payload.get("user_metadata", {})
 
-            user_data = response.user
+            # Extract role from JWT payload (it's at the top level)
+            user_role = payload.get("role")
+            if not user_role and user_metadata:
+                user_role = user_metadata.get("role")
+
+            logger.debug(
+                f"Extracted user info from JWT: id={user_id}, email={payload.get('email')}, role={user_role}"
+            )
+
+            # Parse timestamps from JWT payload
+            iat = payload.get("iat")  # issued at
+
             return User(
-                id=user_data.id,
-                email=user_data.email,
-                created_at=datetime.fromisoformat(
-                    user_data.created_at.replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    user_data.updated_at.replace("Z", "+00:00")
-                ),
-                email_confirmed_at=(
-                    datetime.fromisoformat(
-                        user_data.email_confirmed_at.replace("Z", "+00:00")
-                    )
-                    if user_data.email_confirmed_at
-                    else None
-                ),
-                last_sign_in_at=(
-                    datetime.fromisoformat(
-                        user_data.last_sign_in_at.replace("Z", "+00:00")
-                    )
-                    if user_data.last_sign_in_at
-                    else None
-                ),
-                role=(
-                    user_data.user_metadata.get("role")
-                    if user_data.user_metadata
-                    else None
-                ),
-                metadata=user_data.user_metadata,
+                id=user_id,
+                email=payload.get("email", ""),
+                created_at=datetime.fromtimestamp(iat) if iat else datetime.now(),
+                updated_at=datetime.fromtimestamp(iat) if iat else datetime.now(),
+                email_confirmed_at=datetime.fromtimestamp(iat) if iat else None,
+                last_sign_in_at=datetime.fromtimestamp(iat) if iat else None,
+                role=user_role,
+                metadata=user_metadata,
             )
         except Exception as e:
-            logger.error(f"Error getting user from Supabase: {e}")
+            logger.error(f"Error extracting user info from JWT: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error retrieving user information",
@@ -212,7 +218,15 @@ async def get_current_user(
 ) -> User:
     """Dependency to get current authenticated user."""
     token = credentials.credentials
-    return await auth_service.get_user_from_token(token)
+    try:
+        user = await auth_service.get_user_from_token(token)
+        logger.debug(
+            f"get_current_user successful: user_id={user.id}, role={user.role}"
+        )
+        return user
+    except Exception as e:
+        logger.error(f"get_current_user failed: {e}")
+        raise
 
 
 async def get_current_user_optional(

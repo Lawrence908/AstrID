@@ -18,9 +18,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from src.core.constants import get_database_url
 from src.core.db.session import Base
 from src.domains.catalog.models import SystemConfig
-
-# Import Phase 1 models specifically (not wildcard)
+from src.domains.curation.models import Alert, ValidationEvent
+from src.domains.detection.models import Detection, Model, ModelRun
+from src.domains.differencing.models import Candidate, DifferenceRun
 from src.domains.observations.models import Observation, Survey
+from src.domains.preprocessing.models import PreprocessRun
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -37,11 +39,25 @@ def get_url():
     return get_database_url()
 
 
-# Force model registration by referencing them (like boss's implementation)
+# Force model registration by referencing them
 _ = [
-    Survey,  # Observations models
-    Observation,  # Observations models
-    SystemConfig,  # Catalog models
+    # Observations domain
+    Survey,
+    Observation,
+    # Detection domain
+    Model,
+    ModelRun,
+    Detection,
+    # Curation domain
+    ValidationEvent,
+    Alert,
+    # Differencing domain
+    DifferenceRun,
+    Candidate,
+    # Preprocessing domain
+    PreprocessRun,
+    # Catalog domain
+    SystemConfig,
 ]
 
 # add your model's MetaData object here

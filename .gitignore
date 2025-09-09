@@ -217,5 +217,11 @@ __marimo__/
 *.fit.tar.gz
 *.fit.tar.bz2
 
+# Certs
+certs/
+*.pem
+*.crt
+*.key
+
 # Old file
 zOLD/*

@@ -9,7 +9,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.adapters.api.routes import stream
+from src.adapters.api.routes import auth, stream
+from src.core.api.response_wrapper import create_response
 from src.core.constants import (
     API_DESCRIPTION,
     API_TITLE,
@@ -18,10 +19,15 @@ from src.core.constants import (
     CORS_ALLOW_HEADERS,
     CORS_ALLOW_METHODS,
     CORS_ORIGINS,
+    ENVIRONMENT,
 )
 from src.core.exceptions import AstrIDException
+from src.domains.catalog.api.routes import router as catalog_router
+from src.domains.curation.api.routes import router as curation_router
 from src.domains.detection.api.routes import router as detections_router
+from src.domains.differencing.api.routes import router as differencing_router
 from src.domains.observations.api.routes import router as observations_router
+from src.domains.preprocessing.api.routes import router as preprocessing_router
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -144,16 +150,14 @@ async def astrid_exception_handler(
     elif isinstance(exc, DBError | DatabaseError):
         status_code = 500  # Internal Server Error - general database errors
 
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": {
-                "message": exc.message,
-                "error_code": exc.error_code,
-                "details": exc.details,
-                "type": exc.__class__.__name__,
-            }
+    return create_response(
+        error={
+            "message": exc.message,
+            "error_code": exc.error_code,
+            "details": exc.details,
+            "type": exc.__class__.__name__,
         },
+        status_code=status_code,
     )
 
 
@@ -162,37 +166,210 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     """Handle FastAPI validation errors."""
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": {
-                "message": "Request validation failed",
-                "error_code": "VALIDATION_ERROR",
-                "details": exc.errors(),
-                "type": "RequestValidationError",
-            }
+    return create_response(
+        error={
+            "message": "Request validation failed",
+            "error_code": "VALIDATION_ERROR",
+            "details": exc.errors(),
+            "type": "RequestValidationError",
         },
+        status_code=422,
     )
 
 
 # Include routers
+app.include_router(auth.router, tags=["authentication"])
 app.include_router(observations_router, prefix="/observations", tags=["observations"])
 app.include_router(detections_router, prefix="/detections", tags=["detections"])
+app.include_router(curation_router, prefix="/curation", tags=["curation"])
+app.include_router(differencing_router, prefix="/differencing", tags=["differencing"])
+app.include_router(catalog_router, prefix="/catalog", tags=["catalog"])
+app.include_router(
+    preprocessing_router, prefix="/preprocessing", tags=["preprocessing"]
+)
 app.include_router(stream.router, prefix="/stream", tags=["stream"])
 
 
 @app.get("/")  # type: ignore[misc]
-async def root() -> dict[str, str]:
+async def root():
     """Root endpoint."""
-    return {
-        "message": "AstrID API",
-        "version": APP_VERSION,
-        "docs": "/docs",
-        "redoc": "/redoc",
-    }
+    return create_response(
+        {
+            "message": "AstrID API",
+            "version": APP_VERSION,
+            "docs": "/docs",
+            "redoc": "/redoc",
+        }
+    )
 
 
 @app.get("/health")  # type: ignore[misc]
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "healthy"}
+async def health_check():
+    """Health check endpoint with working service checks."""
+    import time
+    from datetime import datetime
+
+    start_time = time.time()
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "version": APP_VERSION,
+        "environment": ENVIRONMENT,
+        "services": {},
+    }
+
+    # Check database connectivity (this was working in the logs)
+    try:
+        from src.core.db.session import check_pool_health, test_connection
+
+        db_connected = await test_connection()
+        if db_connected:
+            pool_stats = await check_pool_health()
+            health_status["services"]["database"] = {
+                "status": "healthy",
+                "connection": "connected",
+                "pool_stats": pool_stats,
+            }
+        else:
+            health_status["services"]["database"] = {
+                "status": "unhealthy",
+                "connection": "failed",
+            }
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["services"]["database"] = {
+            "status": "unhealthy",
+            "connection": "error",
+            "error": str(e),
+        }
+        health_status["status"] = "degraded"
+
+    # Check Redis connectivity (simple ping test)
+    try:
+        import redis.asyncio as redis
+
+        from src.core.constants import REDIS_URL
+
+        redis_client = redis.from_url(REDIS_URL)
+        await redis_client.ping()
+        await redis_client.close()
+
+        health_status["services"]["redis"] = {
+            "status": "healthy",
+            "connection": "connected",
+        }
+    except Exception as e:
+        health_status["services"]["redis"] = {
+            "status": "unhealthy",
+            "connection": "error",
+            "error": str(e),
+        }
+        health_status["status"] = "degraded"
+
+    # Check MLflow connectivity (if configured)
+    try:
+        from src.core.constants import MLFLOW_SUPABASE_URL
+
+        if MLFLOW_SUPABASE_URL:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Try both localhost (for external access) and mlflow (for container network)
+                mlflow_urls = [
+                    "http://localhost:5000/health",
+                    "http://mlflow:5000/health",
+                ]
+                mlflow_healthy = False
+
+                for url in mlflow_urls:
+                    try:
+                        response = await client.get(url)
+                        if response.status_code == 200:
+                            mlflow_healthy = True
+                            break
+                    except Exception:
+                        continue
+
+                if mlflow_healthy:
+                    health_status["services"]["mlflow"] = {
+                        "status": "healthy",
+                        "connection": "connected",
+                    }
+                else:
+                    health_status["services"]["mlflow"] = {
+                        "status": "unhealthy",
+                        "connection": "all_connection_attempts_failed",
+                    }
+                    health_status["status"] = "degraded"
+        else:
+            health_status["services"]["mlflow"] = {
+                "status": "not_configured",
+                "connection": "disabled",
+            }
+    except Exception as e:
+        health_status["services"]["mlflow"] = {
+            "status": "unhealthy",
+            "connection": "error",
+            "error": str(e),
+        }
+        health_status["status"] = "degraded"
+
+    # Check Prefect connectivity (if configured)
+    try:
+        from src.core.constants import PREFECT_API_URL
+
+        if PREFECT_API_URL:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Try both localhost (for external access) and prefect (for container network)
+                prefect_urls = [
+                    "http://localhost:4200/health",
+                    "http://prefect:4200/health",
+                ]
+                prefect_healthy = False
+
+                for url in prefect_urls:
+                    try:
+                        response = await client.get(url)
+                        if response.status_code == 200:
+                            prefect_healthy = True
+                            break
+                    except Exception:
+                        continue
+
+                if prefect_healthy:
+                    health_status["services"]["prefect"] = {
+                        "status": "healthy",
+                        "connection": "connected",
+                    }
+                else:
+                    health_status["services"]["prefect"] = {
+                        "status": "unhealthy",
+                        "connection": "all_connection_attempts_failed",
+                    }
+                    health_status["status"] = "degraded"
+        else:
+            health_status["services"]["prefect"] = {
+                "status": "not_configured",
+                "connection": "disabled",
+            }
+    except Exception as e:
+        health_status["services"]["prefect"] = {
+            "status": "unhealthy",
+            "connection": "error",
+            "error": str(e),
+        }
+        health_status["status"] = "degraded"
+
+    # Calculate response time
+    response_time = time.time() - start_time
+    health_status["response_time_ms"] = round(response_time * 1000, 2)
+
+    # Determine overall status
+    if health_status["status"] == "healthy":
+        status_code = 200
+    else:
+        status_code = 503  # Service Unavailable for degraded/unhealthy status
+
+    return create_response(health_status, status_code=status_code)

@@ -3,6 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from src.adapters.auth.rbac import (
+    Permission,
+    UserWithRole,
+    require_permission,
+)
+from src.core.api.response_wrapper import ResponseEnvelope, create_response
 from src.core.db.session import get_db
 from src.core.exceptions import (
     AstrIDException,
@@ -64,12 +70,29 @@ class CandidateResponse(BaseModel):
 
 
 # DifferenceRun Routes
-@router.post("/difference-runs", response_model=DifferenceRunResponse)
-async def create_difference_run(run: DifferenceRunCreate, db=Depends(get_db)):
+@router.post(
+    "/difference-runs",
+    response_model=ResponseEnvelope[DifferenceRunResponse],
+    responses={
+        200: {"description": "Difference run created successfully"},
+        400: {"description": "Invalid difference run data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def create_difference_run(
+    run: DifferenceRunCreate,
+    db=Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> ResponseEnvelope[DifferenceRunResponse]:
     """Create a new difference run."""
     try:
         service = DifferenceRunService(db)
-        return await service.create_difference_run(run)
+        result = await service.create_difference_run(run)
+        return create_response(result)
     except AstrIDException as e:
         status_code = (
             400 if isinstance(e, ValidationError | InvalidAlgorithmError) else 500
@@ -77,23 +100,48 @@ async def create_difference_run(run: DifferenceRunCreate, db=Depends(get_db)):
         raise HTTPException(status_code=status_code, detail=str(e)) from e
 
 
-@router.get("/difference-runs", response_model=list[DifferenceRunResponse])
+@router.get(
+    "/difference-runs",
+    response_model=ResponseEnvelope[list[DifferenceRunResponse]],
+    responses={
+        200: {"description": "Difference runs retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
 async def list_difference_runs(
     observation_id: str | None = Query(None, description="Filter by observation ID"),
     status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(100, le=1000, description="Maximum number of runs"),
     offset: int = Query(0, ge=0, description="Number of runs to skip"),
     db=Depends(get_db),
-):
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> ResponseEnvelope[list[DifferenceRunResponse]]:
     """List difference runs with optional filtering."""
     service = DifferenceRunService(db)
-    return await service.list_difference_runs(
+    result = await service.list_difference_runs(
         observation_id=observation_id, status=status, limit=limit, offset=offset
     )
+    return create_response(result)
 
 
-@router.get("/difference-runs/{run_id}", response_model=DifferenceRunResponse)
-async def get_difference_run(run_id: str, db=Depends(get_db)):
+@router.get(
+    "/difference-runs/{run_id}",
+    response_model=ResponseEnvelope[DifferenceRunResponse],
+    responses={
+        200: {"description": "Difference run retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Difference run not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_difference_run(
+    run_id: str,
+    db=Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> ResponseEnvelope[DifferenceRunResponse]:
     """Get a specific difference run by ID."""
     try:
         service = DifferenceRunService(db)
@@ -104,22 +152,35 @@ async def get_difference_run(run_id: str, db=Depends(get_db)):
                 error_code="DIFFERENCE_RUN_NOT_FOUND",
                 details={"run_id": run_id},
             )
-        return run
+        return create_response(run)
     except AstrIDException as e:
         status_code = 404 if isinstance(e, DifferenceRunNotFoundError) else 500
         raise HTTPException(status_code=status_code, detail=str(e)) from e
 
 
-@router.post("/difference-runs/run")
+@router.post(
+    "/difference-runs/run",
+    responses={
+        200: {"description": "Differencing process initiated successfully"},
+        400: {"description": "Invalid parameters or algorithm"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
 async def run_differencing(
     observation_id: str = Query(..., description="Observation ID to process"),
     algorithm: str = Query("zogy", description="Differencing algorithm to use"),
     db=Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
 ):
     """Run differencing algorithm on an observation."""
     try:
         service = DifferenceRunService(db)
-        return await service.run_differencing(observation_id, algorithm)
+        result = await service.run_differencing(observation_id, algorithm)
+        return create_response(result)
     except AstrIDException as e:
         status_code = (
             400
@@ -132,14 +193,38 @@ async def run_differencing(
 
 
 # Candidate Routes
-@router.post("/candidates", response_model=CandidateResponse)
-async def create_candidate(candidate: CandidateCreate, db=Depends(get_db)):
+@router.post(
+    "/candidates",
+    response_model=ResponseEnvelope[CandidateResponse],
+    responses={
+        200: {"description": "Candidate created successfully"},
+        400: {"description": "Invalid candidate data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def create_candidate(
+    candidate: CandidateCreate,
+    db=Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.WRITE_DATA)),
+) -> ResponseEnvelope[CandidateResponse]:
     """Create a new candidate."""
     service = CandidateService(db)
-    return await service.create_candidate(candidate)
+    result = await service.create_candidate(candidate)
+    return create_response(result)
 
 
-@router.get("/candidates", response_model=list[CandidateResponse])
+@router.get(
+    "/candidates",
+    response_model=ResponseEnvelope[list[CandidateResponse]],
+    responses={
+        200: {"description": "Candidates retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
 async def list_candidates(
     difference_run_id: str | None = Query(
         None, description="Filter by difference run ID"
@@ -149,20 +234,36 @@ async def list_candidates(
     limit: int = Query(100, le=1000, description="Maximum number of candidates"),
     offset: int = Query(0, ge=0, description="Number of candidates to skip"),
     db=Depends(get_db),
-):
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> ResponseEnvelope[list[CandidateResponse]]:
     """List candidates with optional filtering."""
     service = CandidateService(db)
-    return await service.list_candidates(
+    result = await service.list_candidates(
         difference_run_id=difference_run_id,
         candidate_type=candidate_type,
         status=status,
         limit=limit,
         offset=offset,
     )
+    return create_response(result)
 
 
-@router.get("/candidates/{candidate_id}", response_model=CandidateResponse)
-async def get_candidate(candidate_id: str, db=Depends(get_db)):
+@router.get(
+    "/candidates/{candidate_id}",
+    response_model=ResponseEnvelope[CandidateResponse],
+    responses={
+        200: {"description": "Candidate retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Candidate not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_candidate(
+    candidate_id: str,
+    db=Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> ResponseEnvelope[CandidateResponse]:
     """Get a specific candidate by ID."""
     try:
         service = CandidateService(db)
@@ -173,7 +274,7 @@ async def get_candidate(candidate_id: str, db=Depends(get_db)):
                 error_code="CANDIDATE_NOT_FOUND",
                 details={"candidate_id": candidate_id},
             )
-        return candidate
+        return create_response(candidate)
     except AstrIDException as e:
         status_code = 404 if isinstance(e, CandidateNotFoundError) else 500
         raise HTTPException(status_code=status_code, detail=str(e)) from e

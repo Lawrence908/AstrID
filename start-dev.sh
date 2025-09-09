@@ -3,6 +3,9 @@
 # AstrID Development Startup Script
 # Usage: ./start-dev.sh [--build] [--down]
 
+# Look at logs after startup
+# docker-compose -p astrid-dev -f docker-compose.yaml logs -f
+
 set -e
 
 PROJECT_NAME="astrid-dev"

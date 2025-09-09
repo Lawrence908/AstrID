@@ -4,14 +4,23 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+
+from src.adapters.auth.rbac import (
+    Permission,
+    UserWithRole,
+    require_permission,
+)
 
 router = APIRouter()
 
 
 @router.get("/detections")  # type: ignore[misc]
-async def stream_detections(request: Request) -> StreamingResponse:
+async def stream_detections(
+    request: Request,
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> StreamingResponse:
     """Stream live detection events using Server-Sent Events."""
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -49,7 +58,10 @@ async def stream_detections(request: Request) -> StreamingResponse:
 
 
 @router.get("/status")  # type: ignore[misc]
-async def stream_status(request: Request) -> StreamingResponse:
+async def stream_status(
+    request: Request,
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> StreamingResponse:
     """Stream system status updates."""
 
     async def status_generator() -> AsyncGenerator[str, None]:

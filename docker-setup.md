@@ -87,10 +87,10 @@ This directory contains the Docker configuration for AstrID development environm
 ### View Logs
 ```bash
 # All services
-docker-compose -p astrid-dev -f docker/compose.yml logs -f
+docker-compose -p astrid-dev -f docker-compose.yaml logs -f
 
 # Specific service
-docker-compose -p astrid-dev -f docker/compose.yml logs -f api
+docker-compose -p astrid-dev -f docker-compose.yaml logs -f api
 ```
 
 ### Rebuild Services

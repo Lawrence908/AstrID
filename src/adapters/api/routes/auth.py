@@ -7,7 +7,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
-from src.adapters.auth.supabase_auth import User, auth_service, get_current_user
+from src.adapters.auth.rbac import (
+    Permission,
+    UserWithRole,
+    require_permission,
+)
+from src.adapters.auth.supabase_auth import User, auth_service
+from src.core.api.response_wrapper import ResponseEnvelope, create_response
 from src.core.exceptions import (
     AstrIDException,
     AuthenticationError,
@@ -20,6 +26,17 @@ from src.core.exceptions import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+def safe_datetime_convert(dt_str_or_obj):
+    """Safely convert datetime strings or objects to datetime."""
+    if dt_str_or_obj is None:
+        return None
+    if isinstance(dt_str_or_obj, datetime):
+        return dt_str_or_obj
+    if isinstance(dt_str_or_obj, str):
+        return datetime.fromisoformat(dt_str_or_obj.replace("Z", "+00:00"))
+    return None
 
 
 # Request/Response models
@@ -81,9 +98,17 @@ class UpdateUserRequest(BaseModel):
 
 
 @router.post(
-    "/signup", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED
+    "/signup",
+    response_model=ResponseEnvelope[SignUpResponse],
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"description": "User created successfully"},
+        400: {"description": "Invalid signup data"},
+        409: {"description": "User already exists"},
+        500: {"description": "Internal server error"},
+    },
 )  # type: ignore[misc]
-async def sign_up(request: SignUpRequest) -> SignUpResponse:
+async def sign_up(request: SignUpRequest) -> ResponseEnvelope[SignUpResponse]:
     """Sign up a new user."""
     try:
         response = await auth_service.sign_up(
@@ -101,35 +126,22 @@ async def sign_up(request: SignUpRequest) -> SignUpResponse:
         user = User(
             id=user_data.id,
             email=user_data.email,
-            created_at=datetime.fromisoformat(
-                user_data.created_at.replace("Z", "+00:00")
-            ),
-            updated_at=datetime.fromisoformat(
-                user_data.updated_at.replace("Z", "+00:00")
-            ),
-            email_confirmed_at=(
-                datetime.fromisoformat(
-                    user_data.email_confirmed_at.replace("Z", "+00:00")
-                )
-                if user_data.email_confirmed_at
-                else None
-            ),
-            last_sign_in_at=(
-                datetime.fromisoformat(user_data.last_sign_in_at.replace("Z", "+00:00"))
-                if user_data.last_sign_in_at
-                else None
-            ),
+            created_at=safe_datetime_convert(user_data.created_at),
+            updated_at=safe_datetime_convert(user_data.updated_at),
+            email_confirmed_at=safe_datetime_convert(user_data.email_confirmed_at),
+            last_sign_in_at=safe_datetime_convert(user_data.last_sign_in_at),
             role=(
                 user_data.user_metadata.get("role") if user_data.user_metadata else None
             ),
             metadata=user_data.user_metadata,
         )
 
-        return SignUpResponse(
+        signup_response = SignUpResponse(
             user=user,
             session=response.session.dict() if response.session else {},  # type: ignore[attr-defined]
             message="User created successfully. Please check your email to confirm your account.",
         )
+        return create_response(signup_response, status_code=status.HTTP_201_CREATED)
 
     except AstrIDException as e:
         status_code = (
@@ -147,8 +159,16 @@ async def sign_up(request: SignUpRequest) -> SignUpResponse:
         ) from e
 
 
-@router.post("/signin", response_model=SignInResponse)  # type: ignore[misc]
-async def sign_in(request: SignInRequest) -> SignInResponse:
+@router.post(
+    "/signin",
+    response_model=ResponseEnvelope[SignInResponse],
+    responses={
+        200: {"description": "User signed in successfully"},
+        401: {"description": "Invalid credentials or email not confirmed"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def sign_in(request: SignInRequest) -> ResponseEnvelope[SignInResponse]:
     """Sign in a user."""
     try:
         response = await auth_service.sign_in(
@@ -174,36 +194,23 @@ async def sign_in(request: SignInRequest) -> SignInResponse:
         user = User(
             id=user_data.id,
             email=user_data.email,
-            created_at=datetime.fromisoformat(
-                user_data.created_at.replace("Z", "+00:00")
-            ),
-            updated_at=datetime.fromisoformat(
-                user_data.updated_at.replace("Z", "+00:00")
-            ),
-            email_confirmed_at=(
-                datetime.fromisoformat(
-                    user_data.email_confirmed_at.replace("Z", "+00:00")
-                )
-                if user_data.email_confirmed_at
-                else None
-            ),
-            last_sign_in_at=(
-                datetime.fromisoformat(user_data.last_sign_in_at.replace("Z", "+00:00"))
-                if user_data.last_sign_in_at
-                else None
-            ),
+            created_at=safe_datetime_convert(user_data.created_at),
+            updated_at=safe_datetime_convert(user_data.updated_at),
+            email_confirmed_at=safe_datetime_convert(user_data.email_confirmed_at),
+            last_sign_in_at=safe_datetime_convert(user_data.last_sign_in_at),
             role=(
                 user_data.user_metadata.get("role") if user_data.user_metadata else None
             ),
             metadata=user_data.user_metadata,
         )
 
-        return SignInResponse(
+        signin_response = SignInResponse(
             user=user,
             session=response.session.dict(),  # type: ignore[attr-defined]
             access_token=response.session.access_token,  # type: ignore[attr-defined]
             refresh_token=response.session.refresh_token,  # type: ignore[attr-defined]
         )
+        return create_response(signin_response)
 
     except AstrIDException as e:
         if isinstance(e, AuthenticationError | EmailNotConfirmedError):
@@ -222,28 +229,46 @@ async def sign_in(request: SignInRequest) -> SignInResponse:
         ) from e
 
 
-@router.post("/signout", status_code=status.HTTP_200_OK)  # type: ignore[misc]
-async def sign_out(current_user: User = Depends(get_current_user)) -> dict[str, str]:
+@router.post(
+    "/signout",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "User signed out successfully"},
+        401: {"description": "Not authenticated"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def sign_out(
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_PUBLIC)),
+):
     """Sign out the current user."""
     try:
-        await auth_service.sign_out(current_user.id)
-        return {"message": "Signed out successfully"}
+        await auth_service.sign_out(current_user.user.id)
+        return create_response({"message": "Signed out successfully"})
     except HTTPException as e:
         logger.warning(f"Sign out warning: {e.detail}")
         # Don't raise exception for sign out failures
-        return {"message": "Signed out successfully"}
+        return create_response({"message": "Signed out successfully"})
     except Exception as e:
         logger.error(f"Sign out error: {e}")
         # Don't raise exception for sign out failures
-        return {"message": "Signed out successfully"}
+        return create_response({"message": "Signed out successfully"})
 
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)  # type: ignore[misc]
-async def reset_password(request: PasswordResetRequest) -> dict[str, str]:
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {"description": "Password reset email sent"},
+        400: {"description": "Invalid email or password update error"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def reset_password(request: PasswordResetRequest):
     """Send password reset email."""
     try:
         await auth_service.reset_password(request.email)
-        return {"message": "Password reset email sent"}
+        return create_response({"message": "Password reset email sent"})
     except AstrIDException as e:
         status_code = (
             400 if isinstance(e, ValidationError | PasswordUpdateError) else 500
@@ -260,45 +285,72 @@ async def reset_password(request: PasswordResetRequest) -> dict[str, str]:
         ) from e
 
 
-@router.get("/me", response_model=UserResponse)  # type: ignore[misc]
+@router.get(
+    "/me",
+    response_model=ResponseEnvelope[UserResponse],
+    responses={
+        200: {"description": "User information retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user),
-) -> UserResponse:
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_PUBLIC)),
+) -> ResponseEnvelope[UserResponse]:
     """Get current user information."""
-    return UserResponse(
-        id=current_user.id,
-        email=current_user.email,
-        created_at=current_user.created_at,
-        updated_at=current_user.updated_at,
-        email_confirmed_at=current_user.email_confirmed_at,
-        last_sign_in_at=current_user.last_sign_in_at,
-        role=current_user.role,
-        metadata=current_user.metadata,
+    logger.debug(
+        f"get_current_user_info called: user_id={current_user.user.id}, role={current_user.role.value}"
     )
 
+    user_response = UserResponse(
+        id=current_user.user.id,
+        email=current_user.user.email,
+        created_at=current_user.user.created_at,
+        updated_at=current_user.user.updated_at,
+        email_confirmed_at=current_user.user.email_confirmed_at,
+        last_sign_in_at=current_user.user.last_sign_in_at,
+        role=current_user.user.role,
+        metadata=current_user.user.metadata,
+    )
 
-@router.put("/me", response_model=UserResponse)  # type: ignore[misc]
+    return create_response(user_response)
+
+
+@router.put(
+    "/me",
+    response_model=ResponseEnvelope[UserResponse],
+    responses={
+        200: {"description": "User updated successfully"},
+        400: {"description": "Invalid user data"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "User not found"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
 async def update_current_user(
-    request: UpdateUserRequest, current_user: User = Depends(get_current_user)
-) -> UserResponse:
+    request: UpdateUserRequest,
+    current_user: UserWithRole = Depends(require_permission(Permission.WRITE_DATA)),
+) -> ResponseEnvelope[UserResponse]:
     """Update current user information."""
     try:
         if request.metadata:
-            await auth_service.update_user_metadata(current_user.id, request.metadata)
+            await auth_service.update_user_metadata(
+                current_user.user.id, request.metadata
+            )
 
         # Get updated user info
         try:
-            updated_user = await auth_service.get_user_from_token(current_user.id)
+            updated_user = await auth_service.get_user_from_token(current_user.user.id)
         except HTTPException as e:
             if e.status_code == 404:
                 raise ResourceNotFoundError(
                     message="User not found after update",
                     error_code="USER_NOT_FOUND",
-                    details={"user_id": current_user.id},
+                    details={"user_id": current_user.user.id},
                 ) from e
             raise
 
-        return UserResponse(
+        user_response = UserResponse(
             id=updated_user.id,
             email=updated_user.email,
             created_at=updated_user.created_at,
@@ -308,6 +360,7 @@ async def update_current_user(
             role=updated_user.role,
             metadata=updated_user.metadata,
         )
+        return create_response(user_response)
 
     except AstrIDException as e:
         status_code = (
@@ -325,7 +378,7 @@ async def update_current_user(
         ) from e
 
 
-@router.get("/health")  # type: ignore[misc]
-async def auth_health() -> dict[str, str]:
+@router.get("/health", responses={200: {"description": "Auth service is healthy"}})  # type: ignore[misc]
+async def auth_health():
     """Health check for auth service."""
-    return {"status": "healthy", "service": "auth"}
+    return create_response({"status": "healthy", "service": "auth"})
