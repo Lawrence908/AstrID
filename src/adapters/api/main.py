@@ -178,7 +178,7 @@ async def validation_exception_handler(
 
 
 # Include routers
-app.include_router(auth.router, tags=["authentication"])
+app.include_router(auth.router)
 app.include_router(observations_router, prefix="/observations", tags=["observations"])
 app.include_router(detections_router, prefix="/detections", tags=["detections"])
 app.include_router(curation_router, prefix="/curation", tags=["curation"])
