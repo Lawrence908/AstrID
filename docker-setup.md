@@ -15,6 +15,17 @@ This directory contains the Docker configuration for AstrID development environm
 ./docker/start-dev.sh --down
 ```
 
+## Delete Everything
+
+```bash
+
+docker ps
+
+docker system df
+
+sudo docker system prune -a --volumes
+```
+
 ## Services
 
 | Service | Port | Description |
@@ -95,12 +106,12 @@ docker-compose -p astrid-dev -f docker-compose.yaml logs -f api
 
 ### Rebuild Services
 ```bash
-./docker/start-dev.sh --build
+./start-dev.sh --build
 ```
 
 ### Reset Everything
 ```bash
-./docker/start-dev.sh --down
+./start-dev.sh --down
 docker-compose -p astrid-dev -f docker/compose.yml down -v
 ```
 
