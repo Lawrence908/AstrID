@@ -54,6 +54,14 @@ class ModelUpdate(BaseModel):
     recall: float | None = None
     f1_score: float | None = None
     accuracy: float | None = None
+
+    # Energy consumption metrics
+    training_energy_wh: float | None = None
+    training_avg_power_w: float | None = None
+    training_peak_power_w: float | None = None
+    training_duration_seconds: int | None = None
+    training_carbon_footprint_kg: float | None = None
+
     is_active: bool | None = None
     model_path: str | None = None
     mlflow_run_id: str | None = None
@@ -121,6 +129,13 @@ class ModelRunUpdate(BaseModel):
     confidence_map_path: str | None = None
     inference_time_ms: int | None = None
     memory_usage_mb: int | None = None
+
+    # Energy consumption metrics
+    energy_consumed_wh: float | None = None
+    avg_power_draw_w: float | None = None
+    peak_power_draw_w: float | None = None
+    carbon_footprint_g: float | None = None
+
     total_predictions: int | None = None
     high_confidence_predictions: int | None = None
     error_message: str | None = None
@@ -136,6 +151,13 @@ class ModelRunRead(ModelRunBase):
     status: ModelRunStatus
     inference_time_ms: int | None = None
     memory_usage_mb: int | None = None
+
+    # Energy consumption metrics
+    energy_consumed_wh: float | None = None
+    avg_power_draw_w: float | None = None
+    peak_power_draw_w: float | None = None
+    carbon_footprint_g: float | None = None
+
     total_predictions: int | None = None
     high_confidence_predictions: int | None = None
     started_at: datetime | None = None

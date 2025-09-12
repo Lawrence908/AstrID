@@ -89,6 +89,17 @@ class Model(Base):
     f1_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
     accuracy: Mapped[float | None] = mapped_column(Numeric(5, 4))
 
+    # Energy consumption metrics (for training)
+    training_energy_wh: Mapped[float | None] = mapped_column(
+        Numeric(10, 4)
+    )  # Watt-hours
+    training_avg_power_w: Mapped[float | None] = mapped_column(Numeric(8, 2))  # Watts
+    training_peak_power_w: Mapped[float | None] = mapped_column(Numeric(8, 2))  # Watts
+    training_duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    training_carbon_footprint_kg: Mapped[float | None] = mapped_column(
+        Numeric(10, 6)
+    )  # kg CO2
+
     # Deployment
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     deployment_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -143,6 +154,14 @@ class ModelRun(Base):
     # Performance
     inference_time_ms: Mapped[int | None] = mapped_column(Integer)
     memory_usage_mb: Mapped[int | None] = mapped_column(Integer)
+
+    # Energy consumption (for inference)
+    energy_consumed_wh: Mapped[float | None] = mapped_column(
+        Numeric(8, 4)
+    )  # Watt-hours
+    avg_power_draw_w: Mapped[float | None] = mapped_column(Numeric(6, 2))  # Watts
+    peak_power_draw_w: Mapped[float | None] = mapped_column(Numeric(6, 2))  # Watts
+    carbon_footprint_g: Mapped[float | None] = mapped_column(Numeric(8, 4))  # grams CO2
 
     # Results
     total_predictions: Mapped[int | None] = mapped_column(Integer)
