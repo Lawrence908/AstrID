@@ -55,7 +55,7 @@ services:
 
   # Prefect server
   prefect:
-    image: prefecthq/prefect:2.14.0
+    image: prefecthq/prefect:latest
     container_name: astrid-prefect-dev
     ports:
       - "4200:4200"
