@@ -1,0 +1,67 @@
+@startuml AstrID Observation Processing Sequence
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID Observation Processing Sequence
+
+actor "External Survey" as Survey
+participant "MAST Client" as MAST
+participant "Observation Service" as ObsService
+participant "Database" as DB
+participant "R2 Storage" as R2
+participant "Preprocessing Worker" as PreprocessWorker
+participant "Differencing Worker" as DiffWorker
+participant "Detection Worker" as DetectionWorker
+participant "Validation Service" as ValidationService
+
+== Observation Ingestion ==
+Survey -> MAST: Query observations by position/time
+MAST -> Survey: Return observation metadata
+MAST -> R2: Download FITS files
+R2 -> MAST: Confirm file storage
+MAST -> ObsService: Create observation record
+ObsService -> DB: Store observation metadata
+ObsService -> DB: Update status to "ingested"
+ObsService -> PreprocessWorker: Trigger preprocessing
+
+== Preprocessing ==
+PreprocessWorker -> DB: Get observation details
+PreprocessWorker -> R2: Download raw FITS file
+PreprocessWorker -> PreprocessWorker: Apply calibration
+PreprocessWorker -> PreprocessWorker: Perform WCS alignment
+PreprocessWorker -> PreprocessWorker: Image registration
+PreprocessWorker -> R2: Store processed FITS
+PreprocessWorker -> DB: Update preprocessing status
+PreprocessWorker -> DiffWorker: Trigger differencing
+
+== Differencing ==
+DiffWorker -> DB: Get observation details
+DiffWorker -> R2: Download processed FITS
+DiffWorker -> R2: Download reference image
+DiffWorker -> DiffWorker: Apply ZOGY algorithm
+DiffWorker -> DiffWorker: Extract sources (SEP)
+DiffWorker -> DiffWorker: Filter candidates
+DiffWorker -> R2: Store difference image
+DiffWorker -> DB: Store candidates
+DiffWorker -> DetectionWorker: Trigger detection
+
+== Detection ==
+DetectionWorker -> DB: Get candidates
+DetectionWorker -> R2: Download difference image
+DetectionWorker -> DetectionWorker: Load U-Net model
+DetectionWorker -> DetectionWorker: Run inference
+DetectionWorker -> DetectionWorker: Score detections
+DetectionWorker -> R2: Store detection results
+DetectionWorker -> DB: Store detections
+DetectionWorker -> ValidationService: Queue for validation
+
+== Validation ==
+ValidationService -> DB: Get pending detections
+ValidationService -> ValidationService: Present to human reviewer
+ValidationService -> ValidationService: Collect validation labels
+ValidationService -> DB: Update detection status
+ValidationService -> ValidationService: Generate alerts if needed
+
+@enduml
