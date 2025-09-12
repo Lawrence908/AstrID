@@ -63,6 +63,10 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_PASSWORD}@${SUPABASE_HOST}/postgres?options=-csearch_path%3Dprefect
+      - PREFECT_SUPABASE_PROJECT_REF=${SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${SUPABASE_HOST}
     networks:
       - astrid-network
     command: prefect server start --host 0.0.0.0 --port 4200
@@ -162,7 +166,15 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    command: ["npm", "run", "dev"]
+    command: >
+      sh -c "
+        # Fix ownership of the app directory and ensure nextjs user can write
+        chown -R nextjs:nodejs /app &&
+        chmod -R 755 /app &&
+        # Switch to nextjs user and start the development server
+        su-exec nextjs npm run dev
+      "
+    user: "0:0"  # Run as root initially to fix permissions
 
 volumes:
   redis_data:

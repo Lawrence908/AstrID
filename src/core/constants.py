@@ -172,6 +172,15 @@ def get_mlflow_tracking_uri() -> str:
     )
 
 
+def get_prefect_database_url() -> str:
+    """Get the Prefect database URL."""
+    return (
+        f"postgresql+asyncpg://"
+        f"{DB_CONFIG['user']}:{DB_CONFIG['password']}@"
+        f"{DB_CONFIG['host']}/postgres?options=-csearch_path%3Dprefect"
+    )
+
+
 def get_db_config() -> dict:
     """Get the database configuration dictionary."""
     return DB_CONFIG.copy()
