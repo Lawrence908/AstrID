@@ -22,10 +22,14 @@ USE CASES FOR ASTRID:
 """
 
 import logging
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import requests
 from astropy.coordinates import SkyCoord
+from astropy.io import fits as _fits
 
 # TODO: Install these packages in your environment
 # uv add astroquery astropy
@@ -115,6 +119,103 @@ class SkyViewClient:
         except Exception as e:
             self.logger.error(f"Error getting available surveys: {e}")
             raise
+
+    # --- Lightweight sync helper used by notebooks/services ---
+    @staticmethod
+    def fetch_reference_image(
+        ra_deg: float,
+        dec_deg: float,
+        *,
+        size_pixels: int = 300,
+        fov_deg: float = 0.02,
+        survey: str = "DSS",
+        hips: str = "CDS/P/DSS2/color",
+        budget_sec: float = 45.0,
+        request_timeout: float = 30.0,
+        to_display_image_fn=None,
+    ) -> tuple[np.ndarray | None, dict[str, Any]]:
+        """Try SkyView first; on failure use CDS HiPS2FITS.
+
+        Returns (image_for_display, info).
+        """
+        import time
+
+        if to_display_image_fn is None:
+            # Local fallback normalization if imaging utils not available
+            from ..imaging.utils import to_display_image as _to_disp
+
+            to_display_image_fn = _to_disp
+
+        info: dict[str, Any] = {
+            "source": None,
+            "skyview_duration_sec": None,
+            "fallback_duration_sec": None,
+            "error": None,
+        }
+
+        start = time.time()
+
+        # Try SkyView
+        if SkyView is not None:
+            try:
+                urls = SkyView.get_image_list(
+                    position=f"{ra_deg} {dec_deg}",
+                    survey=[survey],
+                    coordinates="ICRS",
+                    pixels=size_pixels,
+                )
+                info["skyview_duration_sec"] = time.time() - start
+                if urls and (time.time() - start) < budget_sec:
+                    images = SkyView.get_images(
+                        position=f"{ra_deg} {dec_deg}",
+                        survey=[survey],
+                        coordinates="ICRS",
+                        pixels=size_pixels,
+                    )
+                    if images:
+                        hdu0 = images[0][0]
+                        raw = np.asarray(getattr(hdu0, "data", None))
+                        if raw is not None:
+                            disp = to_display_image_fn(raw)
+                            info["source"] = "skyview"
+                            return disp, info
+            except Exception as e:
+                info["error"] = f"SkyView error: {e}"
+
+        # Fallback to CDS HiPS2FITS
+        try:
+            hips_params = {
+                "hips": hips,
+                "width": size_pixels,
+                "height": size_pixels,
+                "fov": fov_deg,
+                "projection": "TAN",
+                "ra": ra_deg,
+                "dec": dec_deg,
+                "format": "fits",
+            }
+            headers = {"Accept": "application/fits, application/octet-stream"}
+            r = requests.get(
+                "https://alasky.cds.unistra.fr/hips-image-services/hips2fits",
+                params=hips_params,
+                timeout=request_timeout,
+                headers=headers,
+            )
+            r.raise_for_status()
+            ctype = r.headers.get("Content-Type", "").lower()
+            if "fits" not in ctype and not r.content.startswith(b"SIMPLE"):
+                raise ValueError(
+                    f"Unexpected content type from HiPS2FITS: {ctype or 'unknown'}"
+                )
+            hdul = _fits.open(BytesIO(r.content), ignore_missing_simple=True)
+            data = np.asarray(hdul[0].data)
+            disp = to_display_image_fn(data)
+            info["source"] = "hips2fits"
+            info["fallback_duration_sec"] = time.time() - start
+            return disp, info
+        except Exception as e:
+            info["error"] = f"CDS HiPS2FITS error: {e}"
+            return None, info
 
     async def get_image_cutouts(
         self,

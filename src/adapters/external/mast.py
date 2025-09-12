@@ -25,15 +25,21 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-# TODO: Install these packages in your environment
-# uv add astroquery astropy
+# Installation help for optional dependencies
+_INSTALL_HINT = (
+    "Required packages missing: astroquery, astropy.\n"
+    "Install with one of:\n"
+    "  - uv:   uv add astroquery astropy\n"
+    "  - pip:  pip install astroquery astropy\n"
+    "  - conda: conda install -c conda-forge astroquery astropy"
+)
 try:
     from astroquery.mast import Catalogs, Observations
 except ImportError:
     # Graceful fallback for development
     Observations = None
     Catalogs = None
-    logging.warning("astroquery not installed. Install with: uv add astroquery")
+    logging.warning(_INSTALL_HINT)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +57,64 @@ class MASTClient:
         self.logger = logging.getLogger(__name__)
 
         if Observations is None:
-            raise ImportError(
-                "astroquery package required. Install with: uv add astroquery"
-            )
+            raise ImportError(_INSTALL_HINT)
+
+    # --- Lightweight sync helper used by notebooks/services ---
+    @staticmethod
+    def fetch_ps1_cutout(
+        ra_deg: float,
+        dec_deg: float,
+        *,
+        size_pixels: int = 240,
+        filt: str = "g",
+        timeout_sec: int = 30,
+        to_display_image_fn=None,
+    ) -> tuple[Any | None, dict[str, Any]]:
+        """Fetch a small PS1 cutout as a fallback reference image.
+
+        Returns (display_image, info). If unavailable, returns (None, info with error).
+        """
+        from io import BytesIO
+
+        import numpy as np
+        import requests
+        from astropy.io import fits
+
+        if to_display_image_fn is None:
+            from ..imaging.utils import to_display_image as _to_disp
+
+            to_display_image_fn = _to_disp
+
+        info: dict[str, Any] = {"source": "ps1", "filter": filt, "error": None}
+        url = (
+            "https://ps1images.stsci.edu/cgi-bin/ps1cutouts?"
+            f"pos={ra_deg}+{dec_deg}&filter={filt}&format=fits&size={size_pixels}"
+        )
+        headers = {"Accept": "application/fits, application/octet-stream"}
+        try:
+            r = requests.get(url, timeout=timeout_sec, headers=headers)
+            r.raise_for_status()
+            ctype = r.headers.get("Content-Type", "").lower()
+            if "fits" not in ctype and not r.content.startswith(b"SIMPLE"):
+                raise ValueError(f"Unexpected PS1 content type: {ctype or 'unknown'}")
+            with fits.open(BytesIO(r.content), ignore_missing_simple=True) as hdul:
+                data = None
+                for h in hdul:
+                    hdata = getattr(h, "data", None)
+                    if hdata is None:
+                        continue
+                    arr = np.asarray(hdata)
+                    if arr.size == 0:
+                        continue
+                    data = arr
+                    break
+            if data is None:
+                info["error"] = "PS1 response had no image data"
+                return None, info
+            return to_display_image_fn(data), info
+        except Exception as e:
+            info["error"] = str(e)
+            return None, info
 
     async def query_observations_by_position(
         self,
