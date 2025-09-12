@@ -55,7 +55,7 @@ services:
 
   # Prefect server
   prefect:
-    image: prefecthq/prefect:2-latest
+    image: prefecthq/prefect:2.14.0
     container_name: astrid-prefect-dev
     ports:
       - "4200:4200"
@@ -156,6 +156,8 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
+      - PREFECT
+      - PREFECT_WORK_POOL_NAME=astrid-pool
       - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
