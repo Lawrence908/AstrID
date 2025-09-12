@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -214,7 +215,7 @@ async def health_check():
     start_time = time.time()
     health_status = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(UTC).isoformat(),
         "version": APP_VERSION,
         "environment": ENVIRONMENT,
         "services": {},

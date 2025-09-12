@@ -83,4 +83,23 @@ note right of R2Client
   - Lifecycle management
 end note
 
+' Auth and Rate Limits
+note bottom of MAST
+  Auth: API token (env)
+  Rate Limit: 100 req/min
+  Backoff: exp (base=2, jitter)
+end note
+
+note bottom of SkyView
+  Auth: none (public)
+  Rate Limit: 60 req/min
+  Backoff: linear (1s..30s)
+end note
+
+note bottom of R2
+  Auth: Access Key/Secret
+  Rate Limit: per-account
+  Retry: idempotent PUT with checksum
+end note
+
 @enduml

@@ -1,5 +1,6 @@
 """Service for building observation records from ingested data."""
 
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -219,7 +220,7 @@ class ObservationBuilderService:
             # Extract observation time
             from datetime import datetime
 
-            obs_time = datetime.utcnow()
+            obs_time = datetime.now(UTC)
             if "DATE-OBS" in fits_metadata:
                 try:
                     obs_time = datetime.fromisoformat(

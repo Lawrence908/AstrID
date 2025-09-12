@@ -4,6 +4,9 @@ skinparam backgroundColor #0D1117
 skinparam defaultFontName Arial
 skinparam defaultFontSize 12
 
+' Added lifeline stereotypes for clarity
+' Added IDs and statuses to messages, plus error paths and alt blocks
+
 title AstrID Observation Processing Sequence
 
 actor "External Survey" as Survey
@@ -18,50 +21,82 @@ participant "Validation Service" as ValidationService
 
 == Observation Ingestion ==
 Survey -> MAST: Query observations by position/time
-MAST -> Survey: Return observation metadata
-MAST -> R2: Download FITS files
-R2 -> MAST: Confirm file storage
-MAST -> ObsService: Create observation record
-ObsService -> DB: Store observation metadata
-ObsService -> DB: Update status to "ingested"
-ObsService -> PreprocessWorker: Trigger preprocessing
+activate MAST
+MAST -> Survey: Return observation metadata [count=N]
+deactivate MAST
+MAST -> R2: Download FITS files [obsId=OID, status=requested]
+activate R2
+R2 -> MAST: Confirm file storage [obsId=OID, status=stored]
+deactivate R2
+MAST -> ObsService: Create observation record {id: OID, status: ingested}
+activate ObsService
+ObsService -> DB: Store observation metadata {id: OID}
+ObsService -> DB: Update status "ingested" {id: OID}
+ObsService -> PreprocessWorker: Trigger preprocessing {id: OID}
+deactivate ObsService
 
 == Preprocessing ==
-PreprocessWorker -> DB: Get observation details
-PreprocessWorker -> R2: Download raw FITS file
+activate PreprocessWorker
+PreprocessWorker -> DB: Get observation details {id: OID}
+PreprocessWorker -> R2: Download raw FITS {id: OID}
 PreprocessWorker -> PreprocessWorker: Apply calibration
 PreprocessWorker -> PreprocessWorker: Perform WCS alignment
 PreprocessWorker -> PreprocessWorker: Image registration
-PreprocessWorker -> R2: Store processed FITS
-PreprocessWorker -> DB: Update preprocessing status
-PreprocessWorker -> DiffWorker: Trigger differencing
+PreprocessWorker -> R2: Store processed FITS {id: OID}
+PreprocessWorker -> DB: Update preprocessing status {id: OID, status: done}
+PreprocessWorker -> DiffWorker: Trigger differencing {id: OID}
+deactivate PreprocessWorker
 
 == Differencing ==
-DiffWorker -> DB: Get observation details
-DiffWorker -> R2: Download processed FITS
-DiffWorker -> R2: Download reference image
+activate DiffWorker
+DiffWorker -> DB: Get observation details {id: OID}
+DiffWorker -> R2: Download processed FITS {id: OID}
+DiffWorker -> R2: Download reference image {refId=RID}
 DiffWorker -> DiffWorker: Apply ZOGY algorithm
 DiffWorker -> DiffWorker: Extract sources (SEP)
-DiffWorker -> DiffWorker: Filter candidates
-DiffWorker -> R2: Store difference image
-DiffWorker -> DB: Store candidates
-DiffWorker -> DetectionWorker: Trigger detection
+DiffWorker -> DiffWorker: Filter candidates (thresholds)
+DiffWorker -> R2: Store difference image {id: OID}
+DiffWorker -> DB: Store candidates {count=M}
+DiffWorker -> DetectionWorker: Trigger detection {id: OID, candidates=M}
+deactivate DiffWorker
 
 == Detection ==
-DetectionWorker -> DB: Get candidates
-DetectionWorker -> R2: Download difference image
-DetectionWorker -> DetectionWorker: Load U-Net model
+activate DetectionWorker
+DetectionWorker -> DB: Get candidates {id: OID}
+DetectionWorker -> R2: Download difference image {id: OID}
+DetectionWorker -> DetectionWorker: Load U-Net model {version: v}
 DetectionWorker -> DetectionWorker: Run inference
 DetectionWorker -> DetectionWorker: Score detections
-DetectionWorker -> R2: Store detection results
-DetectionWorker -> DB: Store detections
-DetectionWorker -> ValidationService: Queue for validation
+DetectionWorker -> R2: Store detection results {id: OID}
+DetectionWorker -> DB: Store detections {count=K}
+DetectionWorker -> ValidationService: Queue for validation {id: OID, detections=K}
+deactivate DetectionWorker
 
 == Validation ==
-ValidationService -> DB: Get pending detections
+activate ValidationService
+ValidationService -> DB: Get pending detections {id: OID}
 ValidationService -> ValidationService: Present to human reviewer
 ValidationService -> ValidationService: Collect validation labels
-ValidationService -> DB: Update detection status
+ValidationService -> DB: Update detection status {id: OID}
 ValidationService -> ValidationService: Generate alerts if needed
+
+deactivate ValidationService
+
+== Error Paths ==
+alt Ingestion failure
+  ObsService -> DB: Update status {id: OID, status: failed, reason}
+  ObsService -> Survey: Report error
+else Preprocessing failure
+  PreprocessWorker -> DB: Update status {id: OID, status: failed, reason}
+  PreprocessWorker -> ObsService: Notify failure
+else Differencing failure
+  DiffWorker -> DB: Update status {id: OID, status: failed, reason}
+  DiffWorker -> PreprocessWorker: Request re-run
+else Detection failure
+  DetectionWorker -> DB: Update status {id: OID, status: failed, reason}
+  DetectionWorker -> DiffWorker: Request re-run
+else Validation failure
+  ValidationService -> DB: Update status {id: OID, status: failed, reason}
+end
 
 @enduml

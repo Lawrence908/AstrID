@@ -2,7 +2,7 @@
 
 import random
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -335,7 +335,7 @@ class DataIngestionService:
         if obs_time_str:
             obs_time = datetime.fromisoformat(obs_time_str.replace("Z", "+00:00"))
         else:
-            obs_time = datetime.utcnow()
+            obs_time = datetime.now(UTC)
 
         return ObservationCreate(
             survey_id=survey_id,

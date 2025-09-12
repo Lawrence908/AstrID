@@ -23,8 +23,12 @@ note right: PostgreSQL Database
 :Trigger Preprocessing;
 note right: Dramatiq Worker
 
-:Apply Calibration;
-note right: Bias/Dark/Flat correction
+if (Calibration frames available?) then (yes)
+  :Apply Calibration;
+  note right: Bias/Dark/Flat correction
+else (no)
+  :Skip calibration;
+endif
 
 :WCS Alignment;
 note right: World Coordinate System
@@ -38,8 +42,12 @@ note right: R2 Storage
 :Trigger Differencing;
 note right: Dramatiq Worker
 
-:Select Reference Image;
-note right: Historical survey data
+if (Reference image exists?) then (yes)
+  :Select Reference Image;
+  note right: Historical survey data
+else (no)
+  :Fetch reference from SkyView;
+endif
 
 :Apply ZOGY Algorithm;
 note right: ASTR-78: Image Differencing
@@ -80,8 +88,12 @@ note right: Valid/Invalid/Type
 :Update Detection Status;
 note right: Database update
 
-:Generate Alerts;
-note right: ASTR-82: Alert System
+if (Alert threshold exceeded?) then (yes)
+  :Generate Alerts;
+  note right: ASTR-82: Alert System
+else (no)
+  :No alert;
+endif
 
 :Catalog Results;
 note right: ASTR-83: Data Cataloging

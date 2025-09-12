@@ -12,6 +12,7 @@ package "Phase 1: Foundation (P1 Critical)" {
     [ASTR-73: Observation Models] as ASTR73
     [ASTR-84: Core API] as ASTR84
     [ASTR-93: Test Framework] as ASTR93
+    [ASTR-98: Observability Baseline] as ASTR98
 }
 
 package "Phase 2: Core Features (P2 High)" {
@@ -23,6 +24,7 @@ package "Phase 2: Core Features (P2 High)" {
     [ASTR-80: U-Net Integration] as ASTR80
     [ASTR-88: MLflow Setup] as ASTR88
     [ASTR-91: Workflow Orchestration] as ASTR91
+    [ASTR-99: Reference Image Service] as ASTR99
 }
 
 package "Phase 3: Advanced Features (P3 Medium)" {
@@ -30,6 +32,7 @@ package "Phase 3: Advanced Features (P3 Medium)" {
     [ASTR-83: Data Cataloging] as ASTR83
     [ASTR-86: Frontend Dashboard] as ASTR86
     [ASTR-97: Production Deployment] as ASTR97
+    [ASTR-100: Rate Limiting & Backoff] as ASTR100
 }
 
 package "Architecture Components" {
@@ -56,34 +59,27 @@ ASTR84 --> API : "Endpoints"
 
 ASTR93 --> DB : "Test Fixtures"
 ASTR93 --> API : "Test Suite"
+ASTR98 --> Workflow : "Metrics/Tracing"
 
 ' Phase 2 mappings
 ASTR71 --> Storage : "R2 Integration"
-
 ASTR74 --> Storage : "MAST/SkyView"
-
 ASTR75 --> Storage : "FITS Processing"
-
 ASTR76 --> Storage : "Image Processing"
-
 ASTR78 --> Storage : "Differencing"
-
 ASTR80 --> ML : "Model Integration"
-
 ASTR88 --> ML : "Experiment Tracking"
-
 ASTR91 --> Workflow : "Prefect/Dramatiq"
+ASTR99 --> Storage : "Ref Images"
 
 ' Phase 3 mappings
 ASTR82 --> Frontend : "Validation UI"
-
 ASTR83 --> Storage : "Analytics"
-
 ASTR86 --> Frontend : "Dashboard"
-
 ASTR97 --> API : "Production Config"
 ASTR97 --> Storage : "Production Config"
 ASTR97 --> Workflow : "Production Config"
+ASTR100 --> API : "Rate Limiting"
 
 ' Dependencies
 ASTR69 --> ASTR70 : "depends on"
@@ -98,10 +94,13 @@ ASTR76 --> ASTR78 : "enables"
 ASTR78 --> ASTR80 : "enables"
 ASTR71 --> ASTR88 : "enables"
 ASTR69 --> ASTR91 : "enables"
+ASTR99 --> ASTR78 : "supports"
+ASTR98 --> ASTR91 : "supports"
 
 ASTR80 --> ASTR82 : "enables"
 ASTR82 --> ASTR83 : "enables"
 ASTR84 --> ASTR86 : "enables"
 ASTR91 --> ASTR97 : "enables"
+ASTR100 --> ASTR84 : "supports"
 
 @enduml

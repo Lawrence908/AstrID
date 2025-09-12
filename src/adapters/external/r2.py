@@ -25,7 +25,7 @@ USE CASES FOR ASTRID:
 import hashlib
 import logging
 import mimetypes
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -156,7 +156,7 @@ class R2StorageClient:
             # Prepare metadata
             upload_metadata = {
                 "original-filename": local_path.name,
-                "upload-timestamp": datetime.utcnow().isoformat(),
+                "upload-timestamp": datetime.now(UTC).isoformat(),
                 "file-size": str(local_path.stat().st_size),
             }
             if metadata:
@@ -329,7 +329,7 @@ class R2StorageClient:
 
             # Prepare metadata
             upload_metadata = {
-                "upload-timestamp": datetime.utcnow().isoformat(),
+                "upload-timestamp": datetime.now(UTC).isoformat(),
                 "data-size": str(len(data)),
                 "sha256": data_hash,
             }

@@ -113,4 +113,41 @@ DetectionService --> Redis : "detections.created"
 ValidationService --> Redis : "detections.validated"
 CatalogService --> Redis : "catalog.updated"
 
+' Bounded Context Notes
+note right of ObsService
+  Bounded Context: Observations
+  Language: observation, survey, ingestion
+  Ownership: API + DB schemas
+end note
+
+note right of PreprocessService
+  Bounded Context: Preprocessing
+  Language: calibration, WCS, registration
+  Ownership: pipelines + workers
+end note
+
+note right of DiffService
+  Bounded Context: Differencing
+  Language: reference, ZOGY, candidates
+  Ownership: algorithms + thresholds
+end note
+
+note right of DetectionService
+  Bounded Context: Detection
+  Language: model, inference, score
+  Ownership: models + runs
+end note
+
+note right of ValidationService
+  Bounded Context: Curation
+  Language: review, label, alert
+  Ownership: human workflows
+end note
+
+note right of CatalogService
+  Bounded Context: Catalog
+  Language: entry, analytics
+  Ownership: catalog schemas
+end note
+
 @enduml

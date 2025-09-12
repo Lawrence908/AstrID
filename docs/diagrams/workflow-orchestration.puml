@@ -42,23 +42,23 @@ Scheduled --> ObsFlow : "Daily ingestion"
 Manual --> ObsFlow : "On-demand"
 API --> ObsFlow : "Real-time"
 
-ObsFlow --> ObsWorker : "Process observation"
+ObsFlow --> ObsWorker : "Process observation (queue=obs, concurrency=4)"
 ObsWorker --> ObsEvent : "Publish event"
 ObsEvent --> PreprocessFlow : "Trigger preprocessing"
 
-PreprocessFlow --> PreprocessWorker : "Process image"
+PreprocessFlow --> PreprocessWorker : "Process image (queue=pre, concurrency=8)"
 PreprocessWorker --> PreprocessEvent : "Publish event"
 PreprocessEvent --> DiffFlow : "Trigger differencing"
 
-DiffFlow --> DiffWorker : "Create difference"
+DiffFlow --> DiffWorker : "Create difference (queue=diff, concurrency=4)"
 DiffWorker --> CandidatesEvent : "Publish event"
 CandidatesEvent --> DetectionFlow : "Trigger detection"
 
-DetectionFlow --> DetectionWorker : "Run ML inference"
+DetectionFlow --> DetectionWorker : "Run ML inference (queue=ml, concurrency=2)"
 DetectionWorker --> DetectionEvent : "Publish event"
 DetectionEvent --> ValidationFlow : "Trigger validation"
 
-ValidationFlow --> ValidationWorker : "Queue for review"
+ValidationFlow --> ValidationWorker : "Queue for review (queue=curation, concurrency=2)"
 ValidationWorker --> ValidationEvent : "Publish event"
 ValidationEvent --> CatalogFlow : "Trigger cataloging"
 
@@ -69,40 +69,55 @@ DiffWorker --> DiffFlow : "Error handling"
 DetectionWorker --> DetectionFlow : "Error handling"
 ValidationWorker --> ValidationFlow : "Error handling"
 
-' Retry mechanisms
+' Retry mechanisms with parameters
 note right of ObsWorker
   Retry Policy:
-  - Max 3 retries
-  - Exponential backoff
-  - Dead letter queue
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=5m)
+  - DLQ: obs.dlq
 end note
 
 note right of PreprocessWorker
   Retry Policy:
-  - Max 3 retries
-  - Exponential backoff
-  - Dead letter queue
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=10m)
+  - DLQ: pre.dlq
 end note
 
 note right of DiffWorker
   Retry Policy:
-  - Max 3 retries
-  - Exponential backoff
-  - Dead letter queue
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=10m)
+  - DLQ: diff.dlq
 end note
 
 note right of DetectionWorker
   Retry Policy:
-  - Max 3 retries
-  - Exponential backoff
-  - Dead letter queue
+  - Max retries: 2
+  - Backoff: exponential (base=3, max=15m)
+  - DLQ: ml.dlq
 end note
 
 note right of ValidationWorker
   Retry Policy:
-  - Max 3 retries
-  - Exponential backoff
-  - Dead letter queue
+  - Max retries: 5
+  - Backoff: linear (step=1m, max=10m)
+  - DLQ: cur.dlq
+end note
+
+' Concurrency model
+note bottom of PreprocessFlow
+  Parallelism:
+  - Fan-out by observation
+  - Limit: 8 concurrent jobs
+  - Resource: CPU-bound
+end note
+
+note bottom of DetectionFlow
+  Parallelism:
+  - Batch candidates per image
+  - GPU pool size: 1-2
+  - Rate limit: 30 inferences/min
 end note
 
 ' Monitoring and alerting
