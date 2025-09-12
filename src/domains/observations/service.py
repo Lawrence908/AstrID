@@ -1,11 +1,16 @@
 """Service layer for observations domain."""
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import configure_domain_logger
 from src.domains.observations.crud import ObservationCRUD, SurveyCRUD
+from src.domains.observations.ingestion.services import (
+    DataIngestionService,
+    ObservationBuilderService,
+)
 from src.domains.observations.schema import (
     ObservationCreate,
     ObservationListParams,
@@ -402,3 +407,205 @@ class ObservationService:
             f"Found {len(observations)} observations ready for processing"
         )
         return observations
+
+    # Ingestion methods
+
+    async def ingest_observations_from_mast(
+        self,
+        survey_id: UUID,
+        ra: float,
+        dec: float,
+        radius: float = 0.1,
+        missions: list[str] | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[ObservationRead]:
+        """Ingest observations from MAST for a specific sky position.
+
+        Args:
+            survey_id: Survey UUID to associate observations with
+            ra: Right Ascension in degrees
+            dec: Declination in degrees
+            radius: Search radius in degrees
+            missions: List of mission names to query
+            start_time: Start of time range
+            end_time: End of time range
+
+        Returns:
+            List of created observations
+        """
+        self.logger.info(
+            f"Ingesting MAST observations for RA={ra:.4f}°, Dec={dec:.4f}°"
+        )
+
+        try:
+            # Initialize ingestion services
+            ingestion_service = DataIngestionService()
+            builder_service = ObservationBuilderService()
+
+            # Ingest observation data
+            observation_creates = (
+                await ingestion_service.ingest_observations_by_position(
+                    ra=ra,
+                    dec=dec,
+                    radius=radius,
+                    survey_id=survey_id,
+                    missions=missions,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+            )
+
+            # Create observation records
+            observations = await builder_service.create_observations_from_ingestion(
+                self.db, observation_creates
+            )
+
+            # Convert to read schemas
+            result = [ObservationRead.model_validate(obs) for obs in observations]
+
+            self.logger.info(f"Successfully ingested {len(result)} MAST observations")
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Failed to ingest MAST observations: {e}")
+            raise
+
+    async def create_reference_dataset(
+        self,
+        survey_id: UUID,
+        ra: float,
+        dec: float,
+        size: float = 0.25,
+        pixels: int = 512,
+        surveys: list[str] | None = None,
+    ) -> dict[str, str]:
+        """Create a complete reference dataset with image, catalog, and mask.
+
+        Args:
+            survey_id: Survey UUID
+            ra: Right Ascension in degrees
+            dec: Declination in degrees
+            size: Image size in degrees
+            pixels: Image size in pixels
+            surveys: List of surveys to use
+
+        Returns:
+            Dictionary with dataset information
+        """
+        self.logger.info(f"Creating reference dataset for RA={ra:.4f}°, Dec={dec:.4f}°")
+
+        try:
+            ingestion_service = DataIngestionService()
+
+            fits_path = await ingestion_service.create_reference_dataset(
+                ra=ra,
+                dec=dec,
+                size=size,
+                pixels=pixels,
+                surveys=surveys,
+            )
+
+            self.logger.info(f"Successfully created reference dataset: {fits_path}")
+
+            return {
+                "fits_file_path": fits_path,
+                "ra": ra,
+                "dec": dec,
+                "size_degrees": size,
+                "pixels": pixels,
+                "surveys": surveys or ["DSS"],
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to create reference dataset: {e}")
+            raise
+
+    async def batch_ingest_random_observations(
+        self,
+        survey_id: UUID,
+        count: int = 10,
+        missions: list[str] | None = None,
+        avoid_galactic_plane: bool = True,
+    ) -> list[ObservationRead]:
+        """Batch ingest observations from random sky positions.
+
+        Args:
+            survey_id: Survey UUID
+            count: Number of random positions to query
+            missions: List of missions to query
+            avoid_galactic_plane: Whether to avoid galactic plane regions
+
+        Returns:
+            List of created observations
+        """
+        self.logger.info(f"Batch ingesting {count} random observations")
+
+        try:
+            ingestion_service = DataIngestionService()
+            builder_service = ObservationBuilderService()
+
+            # Batch ingest
+            observation_creates = (
+                await ingestion_service.batch_ingest_random_observations(
+                    count=count,
+                    survey_id=survey_id,
+                    avoid_galactic_plane=avoid_galactic_plane,
+                    missions=missions,
+                )
+            )
+
+            # Create observation records
+            observations = await builder_service.create_observations_from_ingestion(
+                self.db, observation_creates
+            )
+
+            # Convert to read schemas
+            result = [ObservationRead.model_validate(obs) for obs in observations]
+
+            self.logger.info(f"Successfully batch ingested {len(result)} observations")
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Failed to batch ingest observations: {e}")
+            raise
+
+    async def ingest_from_fits_directory(
+        self,
+        survey_id: UUID,
+        directory_path: str,
+        file_pattern: str = "*.fits",
+    ) -> list[ObservationRead]:
+        """Ingest observations from FITS files in a directory.
+
+        Args:
+            survey_id: Survey UUID
+            directory_path: Path to directory containing FITS files
+            file_pattern: Glob pattern for files to process
+
+        Returns:
+            List of created observations
+        """
+        self.logger.info(f"Ingesting FITS files from directory: {directory_path}")
+
+        try:
+            builder_service = ObservationBuilderService()
+
+            observations = await builder_service.create_observations_from_directory(
+                db=self.db,
+                survey_id=survey_id,
+                directory_path=directory_path,
+                file_pattern=file_pattern,
+            )
+
+            # Convert to read schemas
+            result = [ObservationRead.model_validate(obs) for obs in observations]
+
+            self.logger.info(
+                f"Successfully ingested {len(result)} observations from directory"
+            )
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Failed to ingest from directory: {e}")
+            raise

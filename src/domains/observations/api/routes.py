@@ -1,5 +1,7 @@
 """Observations API routes."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -181,3 +183,280 @@ async def sync_observations(
         "status": "queued",
     }
     return create_response(result)
+
+
+# Ingestion routes
+
+
+class IngestionRequest(BaseModel):
+    """Base ingestion request model."""
+
+    survey_id: str
+
+
+class MASTIngestionRequest(IngestionRequest):
+    """MAST ingestion request model."""
+
+    ra: float
+    dec: float
+    radius: float = 0.1
+    missions: list[str] | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+
+
+class ReferenceDatasetRequest(IngestionRequest):
+    """Reference dataset creation request model."""
+
+    ra: float
+    dec: float
+    size: float = 0.25
+    pixels: int = 512
+    surveys: list[str] | None = None
+
+
+class BatchIngestionRequest(IngestionRequest):
+    """Batch ingestion request model."""
+
+    count: int = 10
+    missions: list[str] | None = None
+    avoid_galactic_plane: bool = True
+
+
+class DirectoryIngestionRequest(IngestionRequest):
+    """Directory ingestion request model."""
+
+    directory_path: str
+    file_pattern: str = "*.fits"
+
+
+@router.post(
+    "/ingest/mast",
+    response_model=ResponseEnvelope[list[ObservationResponse]],
+    responses={
+        200: {"description": "MAST observations ingested successfully"},
+        400: {"description": "Invalid request parameters"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def ingest_mast_observations(
+    request: MASTIngestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> ResponseEnvelope[list[ObservationResponse]]:
+    """Ingest observations from MAST for a specific sky position."""
+    try:
+        from uuid import UUID
+
+        from src.domains.observations.service import ObservationService
+
+        service = ObservationService(db)
+
+        # Parse optional datetime strings
+        start_time = None
+        end_time = None
+        if request.start_time:
+            start_time = datetime.fromisoformat(request.start_time)
+        if request.end_time:
+            end_time = datetime.fromisoformat(request.end_time)
+
+        observations = await service.ingest_observations_from_mast(
+            survey_id=UUID(request.survey_id),
+            ra=request.ra,
+            dec=request.dec,
+            radius=request.radius,
+            missions=request.missions,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        # Convert to response format (simplified for now)
+        response_observations = []
+        for obs in observations:
+            response_obs = ObservationResponse(
+                id=str(obs.id),
+                survey=str(obs.survey_id),  # In real implementation, get survey name
+                observation_id=obs.observation_id,
+                ra=obs.ra,
+                dec=obs.dec,
+                observation_time=obs.observation_time.isoformat(),
+                filter_band=obs.filter_band,
+                exposure_time=obs.exposure_time,
+                fits_url=obs.fits_url,
+                status=obs.status.value,
+                created_at=obs.created_at.isoformat(),
+                updated_at=obs.updated_at.isoformat(),
+            )
+            response_observations.append(response_obs)
+
+        return create_response(response_observations)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Ingestion failed: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/ingest/reference-dataset",
+    responses={
+        200: {"description": "Reference dataset created successfully"},
+        400: {"description": "Invalid request parameters"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def create_reference_dataset(
+    request: ReferenceDatasetRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+):
+    """Create a complete reference dataset with image, catalog, and mask."""
+    try:
+        from uuid import UUID
+
+        from src.domains.observations.service import ObservationService
+
+        service = ObservationService(db)
+
+        result = await service.create_reference_dataset(
+            survey_id=UUID(request.survey_id),
+            ra=request.ra,
+            dec=request.dec,
+            size=request.size,
+            pixels=request.pixels,
+            surveys=request.surveys,
+        )
+
+        return create_response(result)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Dataset creation failed: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/ingest/batch-random",
+    response_model=ResponseEnvelope[list[ObservationResponse]],
+    responses={
+        200: {"description": "Batch ingestion completed successfully"},
+        400: {"description": "Invalid request parameters"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def batch_ingest_random_observations(
+    request: BatchIngestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> ResponseEnvelope[list[ObservationResponse]]:
+    """Batch ingest observations from random sky positions."""
+    try:
+        from uuid import UUID
+
+        from src.domains.observations.service import ObservationService
+
+        service = ObservationService(db)
+
+        observations = await service.batch_ingest_random_observations(
+            survey_id=UUID(request.survey_id),
+            count=request.count,
+            missions=request.missions,
+            avoid_galactic_plane=request.avoid_galactic_plane,
+        )
+
+        # Convert to response format
+        response_observations = []
+        for obs in observations:
+            response_obs = ObservationResponse(
+                id=str(obs.id),
+                survey=str(obs.survey_id),
+                observation_id=obs.observation_id,
+                ra=obs.ra,
+                dec=obs.dec,
+                observation_time=obs.observation_time.isoformat(),
+                filter_band=obs.filter_band,
+                exposure_time=obs.exposure_time,
+                fits_url=obs.fits_url,
+                status=obs.status.value,
+                created_at=obs.created_at.isoformat(),
+                updated_at=obs.updated_at.isoformat(),
+            )
+            response_observations.append(response_obs)
+
+        return create_response(response_observations)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Batch ingestion failed: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/ingest/directory",
+    response_model=ResponseEnvelope[list[ObservationResponse]],
+    responses={
+        200: {"description": "Directory ingestion completed successfully"},
+        400: {"description": "Invalid request parameters"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def ingest_from_directory(
+    request: DirectoryIngestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> ResponseEnvelope[list[ObservationResponse]]:
+    """Ingest observations from FITS files in a directory."""
+    try:
+        from uuid import UUID
+
+        from src.domains.observations.service import ObservationService
+
+        service = ObservationService(db)
+
+        observations = await service.ingest_from_fits_directory(
+            survey_id=UUID(request.survey_id),
+            directory_path=request.directory_path,
+            file_pattern=request.file_pattern,
+        )
+
+        # Convert to response format
+        response_observations = []
+        for obs in observations:
+            response_obs = ObservationResponse(
+                id=str(obs.id),
+                survey=str(obs.survey_id),
+                observation_id=obs.observation_id,
+                ra=obs.ra,
+                dec=obs.dec,
+                observation_time=obs.observation_time.isoformat(),
+                filter_band=obs.filter_band,
+                exposure_time=obs.exposure_time,
+                fits_url=obs.fits_url,
+                status=obs.status.value,
+                created_at=obs.created_at.isoformat(),
+                updated_at=obs.updated_at.isoformat(),
+            )
+            response_observations.append(response_obs)
+
+        return create_response(response_observations)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Directory ingestion failed: {str(e)}"
+        ) from e
