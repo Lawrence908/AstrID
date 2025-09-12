@@ -130,16 +130,16 @@ async def run():
         # Step 2: Process each observation through the pipeline
         for obs_id in obs_ids:
             # Preprocess observation
-            pre = await preprocess.submit(obs_id)
+            await preprocess.submit(obs_id).result()
 
             # Perform differencing (waits for preprocessing)
-            dif = await difference.submit(obs_id, wait_for=[pre])
+            await difference.submit(obs_id).result()
 
             # Run inference (waits for differencing)
-            res = await infer.submit(obs_id, wait_for=[dif])
+            res = await infer.submit(obs_id).result()
 
             # Persist results and notify (waits for inference)
-            await persist_and_notify.submit(res, wait_for=[res])
+            await persist_and_notify.submit(res).result()
 
         logger.info(f"Successfully processed {len(obs_ids)} observations")
 

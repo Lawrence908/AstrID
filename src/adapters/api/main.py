@@ -199,6 +199,8 @@ async def root():
             "version": APP_VERSION,
             "docs": "/docs",
             "redoc": "/redoc",
+            "frontend": "http://localhost:3000",
+            "planning_dashboard": "http://localhost:3000",
         }
     )
 

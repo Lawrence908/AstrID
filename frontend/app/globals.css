@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 13, 17, 23;
+    --background-end-rgb: 13, 17, 23;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.diagram-container {
+  background: #0D1117;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.diagram-container svg {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.markdown-content {
+  @apply prose prose-invert max-w-none;
+}
+
+.markdown-content h1 {
+  @apply text-3xl font-bold text-astrid-blue mb-6;
+}
+
+.markdown-content h2 {
+  @apply text-2xl font-semibold text-astrid-blue mb-4 mt-8;
+}
+
+.markdown-content h3 {
+  @apply text-xl font-medium text-astrid-blue mb-3 mt-6;
+}
+
+.markdown-content p {
+  @apply text-gray-300 mb-4 leading-relaxed;
+}
+
+.markdown-content code {
+  @apply bg-gray-800 text-astrid-blue px-2 py-1 rounded text-sm;
+}
+
+.markdown-content pre {
+  @apply bg-gray-800 p-4 rounded-lg overflow-x-auto;
+}
+
+.markdown-content pre code {
+  @apply bg-transparent p-0;
+}
+
+.markdown-content ul, .markdown-content ol {
+  @apply text-gray-300 mb-4;
+}
+
+.markdown-content li {
+  @apply mb-2;
+}
