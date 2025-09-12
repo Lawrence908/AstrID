@@ -89,6 +89,7 @@ DVC_REMOTE_URL = os.getenv("DVC_REMOTE_URL", "s3://astrid-data")
 
 # Prefect Configuration
 PREFECT_API_URL = os.getenv("PREFECT_API_URL")
+PREFECT_SERVER_DATABASE_SCHEMA = os.getenv("PREFECT_SERVER_DATABASE_SCHEMA")
 
 # External APIs
 ASTROQUERY_TIMEOUT = int(os.getenv("ASTROQUERY_TIMEOUT", "300"))

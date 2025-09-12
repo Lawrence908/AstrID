@@ -11,7 +11,7 @@ alias astrid-down='docker-compose -p astrid-dev -f docker-compose.yaml down'
 alias astrid-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f'
 alias astrid-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart'
 alias astrid-build='docker-compose -p astrid-dev -f docker-compose.yaml up --build -d'
-alias astrid-prune='docker-compose -p astrid-dev -f docker-compose.yaml down -v --remove-orphans && docker system prune -f'
+alias astrid-prune='docker-compose -p astrid-dev -f docker-compose.yaml down -v --remove-orphans && sudo docker system prune -a --volumes'
 
 # Service-specific logs
 alias astrid-api-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f api'
