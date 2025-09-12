@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,21 +24,14 @@ from src.core.exceptions import (
     ValidationError,
 )
 from src.domains.observations.repository import ObservationRepository
+from src.domains.observations.schema import (
+    ObservationCreate as DomainObservationCreate,
+)
+from src.domains.observations.schema import (
+    ObservationRead,
+)
 
 router = APIRouter()
-
-
-class ObservationCreate(BaseModel):
-    """Create observation request model."""
-
-    survey: str
-    observation_id: str
-    ra: float
-    dec: float
-    observation_time: str
-    filter_band: str
-    exposure_time: float
-    fits_url: str
 
 
 class ObservationResponse(BaseModel):
@@ -59,7 +53,7 @@ class ObservationResponse(BaseModel):
 
 @router.post(
     "/",
-    response_model=ResponseEnvelope[ObservationResponse],
+    response_model=ResponseEnvelope[ObservationRead],
     responses={
         200: {"description": "Observation created successfully"},
         400: {"description": "Invalid observation data"},
@@ -70,17 +64,19 @@ class ObservationResponse(BaseModel):
     },
 )  # type: ignore[misc]
 async def create_observation(
-    observation: ObservationCreate,
+    observation: DomainObservationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserWithRole = Depends(
         require_permission(Permission.MANAGE_OPERATIONS)
     ),
-) -> ResponseEnvelope[ObservationResponse]:
+) -> JSONResponse:
     """Create a new observation."""
     try:
         repo = ObservationRepository(db)
         result = await repo.create(observation)
-        return create_response(result)
+        # Convert DB model to domain read schema for consistent serialization
+        response_obj = ObservationRead.model_validate(result)
+        return create_response(response_obj)
     except AstrIDException as e:
         # Convert to HTTPException for FastAPI
         status_code = (
@@ -116,7 +112,7 @@ async def list_observations(
     offset: int = Query(0, ge=0, description="Number of observations to skip"),
     db: AsyncSession = Depends(get_db),
     current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
-) -> ResponseEnvelope[list[ObservationResponse]]:
+) -> JSONResponse:
     """List observations with optional filtering."""
     repo = ObservationRepository(db)
     result = await repo.list(survey=survey, status=status, limit=limit, offset=offset)
@@ -138,7 +134,7 @@ async def get_observation(
     observation_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
-) -> ResponseEnvelope[ObservationResponse]:
+) -> JSONResponse:
     """Get a specific observation by ID."""
     try:
         repo = ObservationRepository(db)
@@ -247,7 +243,7 @@ async def ingest_mast_observations(
     current_user: UserWithRole = Depends(
         require_permission(Permission.MANAGE_OPERATIONS)
     ),
-) -> ResponseEnvelope[list[ObservationResponse]]:
+) -> JSONResponse:
     """Ingest observations from MAST for a specific sky position."""
     try:
         from uuid import UUID
@@ -360,7 +356,7 @@ async def batch_ingest_random_observations(
     current_user: UserWithRole = Depends(
         require_permission(Permission.MANAGE_OPERATIONS)
     ),
-) -> ResponseEnvelope[list[ObservationResponse]]:
+) -> JSONResponse:
     """Batch ingest observations from random sky positions."""
     try:
         from uuid import UUID
@@ -420,7 +416,7 @@ async def ingest_from_directory(
     current_user: UserWithRole = Depends(
         require_permission(Permission.MANAGE_OPERATIONS)
     ),
-) -> ResponseEnvelope[list[ObservationResponse]]:
+) -> JSONResponse:
     """Ingest observations from FITS files in a directory."""
     try:
         from uuid import UUID

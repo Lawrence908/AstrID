@@ -16,6 +16,7 @@ alias astrid-prune='docker-compose -p astrid-dev -f docker-compose.yaml down -v 
 # Service-specific logs
 alias astrid-api-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f api'
 alias astrid-worker-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f worker'
+alias astrid-prefect-worker-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f prefect-worker'
 alias astrid-frontend-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f frontend'
 alias astrid-redis-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f redis'
 alias astrid-mlflow-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f mlflow'
@@ -24,11 +25,13 @@ alias astrid-prefect-logs='docker-compose -p astrid-dev -f docker-compose.yaml l
 # Service-specific shells
 alias astrid-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec api bash'
 alias astrid-worker-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec worker bash'
+alias astrid-prefect-worker-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec prefect-worker bash'
 alias astrid-frontend-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec frontend sh'
 
 # Service-specific restarts
 alias astrid-api-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart api'
 alias astrid-worker-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart worker'
+alias astrid-prefect-worker-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart prefect-worker'
 alias astrid-frontend-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart frontend'
 
 # Development helpers
@@ -44,8 +47,9 @@ alias astrid-urls='echo "Frontend: http://localhost:3000" && echo "API: http://l
 
 echo "  Available aliases:"
 echo "    astrid-up, astrid-down, astrid-logs, astrid-restart, astrid-build, astrid-prune"
-echo "    astrid-api-logs, astrid-worker-logs, astrid-frontend-logs, astrid-redis-logs"
-echo "    astrid-shell, astrid-worker-shell, astrid-frontend-shell"
-echo "    astrid-api-restart, astrid-worker-restart, astrid-frontend-restart"
-echo "    astrid-status, astrid-health, astrid-frontend, astrid-api-docs"
+echo "    astrid-api-logs, astrid-worker-logs, astrid-prefect-worker-logs, astrid-frontend-logs"
+echo "    astrid-redis-logs, astrid-mlflow-logs, astrid-prefect-logs"
+echo "    astrid-shell, astrid-worker-shell, astrid-prefect-worker-shell, astrid-frontend-shell"
+echo "    astrid-api-restart, astrid-worker-restart, astrid-prefect-worker-restart, astrid-frontend-restart"
+echo "    astrid-status, astrid-health, astrid-frontend, astrid-api-docs, astrid-prefect"
 echo "    astrid-urls (shows all service URLs)"

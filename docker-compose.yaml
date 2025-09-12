@@ -116,7 +116,7 @@ services:
       retries: 3
       start_period: 300s
 
-  # AstrID Worker
+  # AstrID Worker (Dramatiq)
   worker:
     build:
       context: .
@@ -145,6 +145,36 @@ services:
       mlflow:
         condition: service_healthy
     command: ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]
+
+  # Prefect Worker
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: astrid-prefect-worker-dev
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=http://prefect:4200/api
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - PYTHONPATH=/app/src
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+    networks:
+      - astrid-network
+    depends_on:
+      prefect:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "prefect", "worker", "start", "--pool", "astrid-pool"]
 
   # AstrID Frontend
   frontend:
