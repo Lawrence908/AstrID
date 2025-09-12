@@ -30,6 +30,7 @@ sudo docker system prune -a --volumes
 
 | Service | Port | Description |
 |---------|------|-------------|
+| Frontend | 3000 | Next.js planning dashboard with hot reload |
 | API | 8000 | FastAPI application with hot reload |
 | MLflow | 5000 | ML experiment tracking |
 | Prefect | 4200 | Workflow orchestration |
@@ -72,6 +73,7 @@ sudo docker system prune -a --volumes
 ## Development Features
 
 ### Hot Reload
+- Frontend service automatically reloads on code changes
 - API service automatically reloads on code changes
 - Source code is mounted as volumes for instant updates
 - Logs are persisted to `./logs/` directory

@@ -142,6 +142,28 @@ services:
         condition: service_healthy
     command: ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]
 
+  # AstrID Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: astrid-frontend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - astrid-network
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["npm", "run", "dev"]
+
 volumes:
   redis_data:
 

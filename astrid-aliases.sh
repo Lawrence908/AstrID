@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# AstrID Docker Compose Aliases
+# Source this file in your shell: source astrid-aliases.sh
+
+echo "  AstrID Docker Aliases               - astrid-"
+
+# Core service management
+alias astrid-up='docker-compose -p astrid-dev -f docker-compose.yaml up -d'
+alias astrid-down='docker-compose -p astrid-dev -f docker-compose.yaml down'
+alias astrid-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f'
+alias astrid-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart'
+alias astrid-build='docker-compose -p astrid-dev -f docker-compose.yaml up --build -d'
+alias astrid-prune='docker-compose -p astrid-dev -f docker-compose.yaml down -v --remove-orphans && docker system prune -f'
+
+# Service-specific logs
+alias astrid-api-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f api'
+alias astrid-worker-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f worker'
+alias astrid-frontend-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f frontend'
+alias astrid-redis-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f redis'
+alias astrid-mlflow-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f mlflow'
+alias astrid-prefect-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f prefect'
+
+# Service-specific shells
+alias astrid-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec api bash'
+alias astrid-worker-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec worker bash'
+alias astrid-frontend-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec frontend sh'
+
+# Service-specific restarts
+alias astrid-api-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart api'
+alias astrid-worker-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart worker'
+alias astrid-frontend-restart='docker-compose -p astrid-dev -f docker-compose.yaml restart frontend'
+
+# Development helpers
+alias astrid-status='docker-compose -p astrid-dev -f docker-compose.yaml ps'
+alias astrid-health='curl -s http://localhost:8000/health | jq .'
+alias astrid-frontend='open http://localhost:3000'
+alias astrid-api-docs='open http://localhost:8000/docs'
+alias astrid-mlflow='open http://localhost:5000'
+alias astrid-prefect='open http://localhost:4200'
+
+# Quick access URLs
+alias astrid-urls='echo "Frontend: http://localhost:3000" && echo "API: http://localhost:8000" && echo "API Docs: http://localhost:8000/docs" && echo "MLflow: http://localhost:5000" && echo "Prefect: http://localhost:4200"'
+
+echo "  Available aliases:"
+echo "    astrid-up, astrid-down, astrid-logs, astrid-restart, astrid-build, astrid-prune"
+echo "    astrid-api-logs, astrid-worker-logs, astrid-frontend-logs, astrid-redis-logs"
+echo "    astrid-shell, astrid-worker-shell, astrid-frontend-shell"
+echo "    astrid-api-restart, astrid-worker-restart, astrid-frontend-restart"
+echo "    astrid-status, astrid-health, astrid-frontend, astrid-api-docs"
+echo "    astrid-urls (shows all service URLs)"
