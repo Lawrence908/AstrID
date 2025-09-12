@@ -74,6 +74,7 @@ class MASTClient:
 
         Returns (display_image, info). If unavailable, returns (None, info with error).
         """
+        import time
         from io import BytesIO
 
         import numpy as np
@@ -86,35 +87,68 @@ class MASTClient:
             to_display_image_fn = _to_disp
 
         info: dict[str, Any] = {"source": "ps1", "filter": filt, "error": None}
-        url = (
-            "https://ps1images.stsci.edu/cgi-bin/ps1cutouts?"
-            f"pos={ra_deg}+{dec_deg}&filter={filt}&format=fits&size={size_pixels}"
-        )
-        headers = {"Accept": "application/fits, application/octet-stream"}
-        try:
-            r = requests.get(url, timeout=timeout_sec, headers=headers)
-            r.raise_for_status()
-            ctype = r.headers.get("Content-Type", "").lower()
-            if "fits" not in ctype and not r.content.startswith(b"SIMPLE"):
-                raise ValueError(f"Unexpected PS1 content type: {ctype or 'unknown'}")
-            with fits.open(BytesIO(r.content), ignore_missing_simple=True) as hdul:
-                data = None
-                for h in hdul:
-                    hdata = getattr(h, "data", None)
-                    if hdata is None:
-                        continue
-                    arr = np.asarray(hdata)
-                    if arr.size == 0:
-                        continue
-                    data = arr
-                    break
-            if data is None:
-                info["error"] = "PS1 response had no image data"
-                return None, info
-            return to_display_image_fn(data), info
-        except Exception as e:
-            info["error"] = str(e)
-            return None, info
+        base = "https://ps1images.stsci.edu/cgi-bin/ps1cutouts"
+        fits_url = f"{base}?pos={ra_deg}+{dec_deg}&filter={filt}&format=fits&size={size_pixels}"
+        jpeg_url = f"{base}?pos={ra_deg}+{dec_deg}&filter={filt}&format=jpeg&size={size_pixels}"
+        headers = {
+            "Accept": "application/fits, application/octet-stream, image/jpeg",
+            "User-Agent": "AstrID-PS1/1.0 (+https://github.com/AstrID)",
+        }
+
+        def _attempt(url: str) -> tuple[Any | None, str | None]:
+            try:
+                resp = requests.get(url, timeout=timeout_sec, headers=headers)
+                resp.raise_for_status()
+                ctype = resp.headers.get("Content-Type", "").lower()
+                if "fits" in ctype or resp.content.startswith(b"SIMPLE"):
+                    with fits.open(
+                        BytesIO(resp.content), ignore_missing_simple=True
+                    ) as hdul:
+                        data = None
+                        for h in hdul:
+                            hdata = getattr(h, "data", None)
+                            if hdata is None:
+                                continue
+                            arr = np.asarray(hdata)
+                            if arr.size == 0:
+                                continue
+                            data = arr
+                            break
+                    return data, None
+                if "jpeg" in ctype or "image/" in ctype:
+                    try:
+                        from io import BytesIO as _BIO
+
+                        from PIL import Image as _PILImage  # type: ignore
+
+                        img = np.asarray(
+                            _PILImage.open(_BIO(resp.content)).convert("RGB")
+                        )
+                        return img, None
+                    except Exception as _:
+                        return None, f"Unsupported image payload ({ctype})"
+                return None, f"Unexpected PS1 content type: {ctype or 'unknown'}"
+            except Exception as ex:
+                return None, str(ex)
+
+        # Try FITS with retries and backoff
+        backoffs = [0.0, 0.8, 1.6]
+        last_err: str | None = None
+        for delay in backoffs:
+            if delay:
+                time.sleep(delay)
+            data, err = _attempt(fits_url)
+            if data is not None:
+                return to_display_image_fn(data), info
+            last_err = err
+
+        # JPEG fallback for display-only
+        data, err = _attempt(jpeg_url)
+        if data is not None:
+            return to_display_image_fn(data), {**info, "format": "jpeg"}
+
+        info["error"] = last_err or err or "Unknown PS1 error"
+        return None, info
 
     async def query_observations_by_position(
         self,

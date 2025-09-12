@@ -142,9 +142,10 @@ class SkyViewClient:
 
         if to_display_image_fn is None:
             # Local fallback normalization if imaging utils not available
-            from ..imaging.utils import to_display_image as _to_disp
+            from src.adapters.imaging.utils import to_display_image as _to_disp
 
             to_display_image_fn = _to_disp
+            logger.warning("to_display_image_fn is None; using local fallback")
 
         info: dict[str, Any] = {
             "source": None,
@@ -158,6 +159,7 @@ class SkyViewClient:
         # Try SkyView
         if SkyView is not None:
             try:
+                logger.info(f"Getting image list from SkyView for {survey}")
                 urls = SkyView.get_image_list(
                     position=f"{ra_deg} {dec_deg}",
                     survey=[survey],
@@ -166,6 +168,7 @@ class SkyViewClient:
                 )
                 info["skyview_duration_sec"] = time.time() - start
                 if urls and (time.time() - start) < budget_sec:
+                    logger.info(f"Getting images from SkyView for {survey}")
                     images = SkyView.get_images(
                         position=f"{ra_deg} {dec_deg}",
                         survey=[survey],
@@ -173,6 +176,7 @@ class SkyViewClient:
                         pixels=size_pixels,
                     )
                     if images:
+                        logger.info(f"Got images from SkyView for {survey}")
                         hdu0 = images[0][0]
                         raw = np.asarray(getattr(hdu0, "data", None))
                         if raw is not None:
@@ -184,6 +188,7 @@ class SkyViewClient:
 
         # Fallback to CDS HiPS2FITS
         try:
+            logger.info(f"Getting image from CDS HiPS2FITS for {survey}")
             hips_params = {
                 "hips": hips,
                 "width": size_pixels,
@@ -207,6 +212,7 @@ class SkyViewClient:
                 raise ValueError(
                     f"Unexpected content type from HiPS2FITS: {ctype or 'unknown'}"
                 )
+            logger.info(f"Got image from CDS HiPS2FITS for {survey}")
             hdul = _fits.open(BytesIO(r.content), ignore_missing_simple=True)
             data = np.asarray(hdul[0].data)
             disp = to_display_image_fn(data)
@@ -215,6 +221,7 @@ class SkyViewClient:
             return disp, info
         except Exception as e:
             info["error"] = f"CDS HiPS2FITS error: {e}"
+            logger.error(f"Error getting image from CDS HiPS2FITS for {survey}: {e}")
             return None, info
 
     async def get_image_cutouts(
