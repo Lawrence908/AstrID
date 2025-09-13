@@ -1,0 +1,224 @@
+services:
+  # Using Supabase PostgreSQL (no local PostgreSQL container needed)
+
+  # Redis for message queues and caching
+  redis:
+    image: redis:7-alpine
+    container_name: astrid-redis-dev
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-foo}
+    entrypoint: >
+      sh -c '
+        redis-server --requirepass "$$REDIS_PASSWORD" && redis-cli -a "$$REDIS_PASSWORD" config set requirepass "$$REDIS_PASSWORD"
+      '
+    volumes:
+      - redis_data:/data
+    networks:
+      - astrid-network
+    healthcheck:
+      test: sh -c 'redis-cli -a "$$REDIS_PASSWORD" ping'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # MLflow tracking server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: astrid-mlflow-dev
+    env_file:
+      - .env
+    environment:
+      # MLflow uses psycopg (sync driver) while main app uses asyncpg (async driver)
+      - MLFLOW_ARTIFACT_ROOT=s3://astrid-models
+      - MLFLOW_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=auto
+    ports:
+      - "5000:5000"
+    networks:
+      - astrid-network
+    command: >
+      bash -c "pip install psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 120'"
+    # Using Supabase PostgreSQL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Prefect server
+  prefect:
+    image: python:3.11-slim
+    container_name: astrid-prefect-dev
+    ports:
+      - "4200:4200"
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+    networks:
+      - astrid-network
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y curl &&
+        pip install 'prefect[postgres]>=2.14.0' &&
+        prefect server start --host 0.0.0.0 --port 4200
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # AstrID API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: astrid-api-dev
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Supabase credentials loaded from .env file
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - PYTHONPATH=/app/src
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./certs:/app/certs
+    networks:
+      - astrid-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    command: python -m uvicorn src.adapters.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 300s # Set to 30s later in development
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
+  # AstrID Worker (Dramatiq)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: astrid-worker-dev
+    env_file:
+      - .env
+    environment:
+      # Supabase credentials loaded from .env file
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - PYTHONPATH=/app/src
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+    networks:
+      - astrid-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    command: ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]
+
+  # Prefect Worker
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: astrid-prefect-worker-dev
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=http://prefect:4200/api
+      - PREFECT_WORK_POOL_NAME=astrid-pool
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - PYTHONPATH=/app/src
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+    networks:
+      - astrid-network
+    depends_on:
+      prefect:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "prefect", "worker", "start", "--pool", "astrid-pool"]
+
+  # AstrID Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: astrid-frontend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - astrid-network
+    depends_on:
+      api:
+        condition: service_healthy
+    command: >
+      sh -c "
+        # Fix ownership of the app directory and ensure nextjs user can write
+        chown -R nextjs:nodejs /app &&
+        chmod -R 755 /app &&
+        # Switch to nextjs user and start the development server
+        su-exec nextjs npm run dev
+      "
+    user: "0:0"  # Run as root initially to fix permissions
+
+volumes:
+  redis_data:
+
+networks:
+  astrid-network:
+    name: astrid-dev
+    driver: bridge

@@ -1,0 +1,36 @@
+# Dockerfile for Prefect worker and flow execution
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app/src
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy project metadata and source code first (needed for editable install)
+COPY pyproject.toml uv.lock ./
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
+
+# Install Python dependencies (editable install requires src present)
+RUN pip install uv && uv pip install --system --no-cache -e .
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1
+
+# Default command for Prefect worker
+CMD ["python", "-m", "prefect", "worker", "start", "--pool", "astrid-pool"]
