@@ -63,19 +63,17 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://localhost:4200/api
-      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_PASSWORD}@${SUPABASE_HOST}/postgres?options=-csearch_path%3Dprefect
-      - PREFECT_SUPABASE_PROJECT_REF=${SUPABASE_PROJECT_REF}
-      - PREFECT_SUPABASE_PASSWORD=${SUPABASE_PASSWORD}
-      - PREFECT_SUPABASE_HOST=${SUPABASE_HOST}
-      # - PREFECT_SERVER_DATABASE_SCHEMA=prefect
-      - PREFECT_SERVER_DATABASE_SCHEMA=${PREFECT_SERVER_DATABASE_SCHEMA}
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
     networks:
       - astrid-network
     command: >
       bash -c "
         apt-get update && apt-get install -y curl &&
         pip install 'prefect[postgres]>=2.14.0' &&
-        prefect server start --external-postgres --postgres-url postgresql+asyncpg://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_PASSWORD}@${SUPABASE_HOST}/postgres --server-port 4200
+        prefect server start --host 0.0.0.0 --port 4200
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
@@ -163,8 +161,10 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
-      - PREFECT
       - PREFECT_WORK_POOL_NAME=astrid-pool
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}

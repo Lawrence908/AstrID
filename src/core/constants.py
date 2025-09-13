@@ -83,13 +83,22 @@ MLFLOW_SUPABASE_KEY = os.getenv("MLFLOW_SUPABASE_KEY")
 MLFLOW_SUPABASE_SERVICE_ROLE_KEY = os.getenv("MLFLOW_SUPABASE_SERVICE_ROLE_KEY")
 MLFLOW_SUPABASE_JWT_SECRET = os.getenv("MLFLOW_SUPABASE_JWT_SECRET")
 
-# DVC Configuration
-DVC_REMOTE_NAME = os.getenv("DVC_REMOTE_NAME", "r2")
-DVC_REMOTE_URL = os.getenv("DVC_REMOTE_URL", "s3://astrid-data")
+# Prefect Supabase Configuration
+PREFECT_SUPABASE_URL = os.getenv("PREFECT_SUPABASE_URL")
+PREFECT_SUPABASE_PROJECT_REF = os.getenv("PREFECT_SUPABASE_PROJECT_REF")
+PREFECT_SUPABASE_PASSWORD = os.getenv("PREFECT_SUPABASE_PASSWORD")
+PREFECT_SUPABASE_HOST = os.getenv("PREFECT_SUPABASE_HOST")
+PREFECT_SUPABASE_SSL_CERT_PATH = os.getenv("PREFECT_SUPABASE_SSL_CERT_PATH")
+PREFECT_SUPABASE_KEY = os.getenv("PREFECT_SUPABASE_KEY")
+PREFECT_SUPABASE_SERVICE_ROLE_KEY = os.getenv("PREFECT_SUPABASE_SERVICE_ROLE_KEY")
+PREFECT_SUPABASE_JWT_SECRET = os.getenv("PREFECT_SUPABASE_JWT_SECRET")
 
 # Prefect Configuration
 PREFECT_API_URL = os.getenv("PREFECT_API_URL")
-PREFECT_SERVER_DATABASE_SCHEMA = os.getenv("PREFECT_SERVER_DATABASE_SCHEMA")
+
+# DVC Configuration
+DVC_REMOTE_NAME = os.getenv("DVC_REMOTE_NAME", "r2")
+DVC_REMOTE_URL = os.getenv("DVC_REMOTE_URL", "s3://astrid-data")
 
 # External APIs
 ASTROQUERY_TIMEOUT = int(os.getenv("ASTROQUERY_TIMEOUT", "300"))
@@ -154,6 +163,27 @@ MLFLOW_DB_CONFIG = {
     "echo": DEBUG,  # Enable echo in debug mode
 }
 
+# Prefect Database connection settings
+PREFECT_DB_CONFIG = {
+    "host": PREFECT_SUPABASE_HOST or "aws-0-us-west-1.pooler.supabase.com:5432",
+    "database": "postgres",
+    "user": f"postgres.{PREFECT_SUPABASE_PROJECT_REF}"
+    if PREFECT_SUPABASE_PROJECT_REF
+    else "postgres",
+    "password": PREFECT_SUPABASE_PASSWORD,
+    "ssl": "require",
+    "ssl_cert_path": PREFECT_SUPABASE_SSL_CERT_PATH,
+    # Connection pool settings
+    "pool_size": pool_config["pool_size"],
+    "max_overflow": pool_config["max_overflow"],
+    "pool_timeout": 30,  # Seconds to wait for a connection from pool
+    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_pre_ping": True,  # Verify connections before use
+    # Query timeout settings
+    "command_timeout": 60,  # Default timeout for queries in seconds
+    "echo": DEBUG,  # Enable echo in debug mode
+}
+
 
 def get_database_url() -> str:
     """Get the database URL."""
@@ -177,8 +207,8 @@ def get_prefect_database_url() -> str:
     """Get the Prefect database URL."""
     return (
         f"postgresql+asyncpg://"
-        f"{DB_CONFIG['user']}:{DB_CONFIG['password']}@"
-        f"{DB_CONFIG['host']}/postgres?options=-csearch_path%3Dprefect"
+        f"{PREFECT_DB_CONFIG['user']}:{PREFECT_DB_CONFIG['password']}@"
+        f"{PREFECT_DB_CONFIG['host']}/postgres"
     )
 
 
