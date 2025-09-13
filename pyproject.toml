@@ -1,0 +1,181 @@
+# uv pip install --requirements pyproject.toml
+# uv pip install -r pyproject.toml --extra dev
+
+[build-system]
+requires = ["setuptools>=64.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astrid"
+version = "0.1.0"
+description = "Astronomical Identification: Temporal Dataset Preparation and Anomaly Detection"
+authors = [
+    {name = "Chris Lawrence", email = "chris.lawrence@viu.ca"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+keywords = ["astronomy", "machine-learning", "computer-vision", "anomaly-detection"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # FastAPI and web
+    "fastapi[standard]",
+    "uvicorn==0.34.2",
+    "gunicorn==23.0.0",
+    "pydantic>=2.10",
+    "pydantic-core>=2.27.0",
+    "pydantic-settings>=2.0.0",
+    "python-multipart>=0.0.6",
+
+    # Database
+    "sqlalchemy[asyncio]==2.0.23",
+    "alembic==1.15.2",
+    "asyncpg==0.30.0",
+    "psycopg[binary]>=3.1.0",
+    "greenlet>=3.1.1",
+
+    # ML and data science
+    "mlflow>=2.14.0",
+    "dvc[ssh,s3]>=3.0.0",
+    "boto3>=1.34.0",
+    "aioboto3==13.3.0",
+    "astropy>=5.3.0",
+    "astroquery>=0.4.7",
+    "photutils>=1.8.0",
+    "sep>=1.2.0",
+    "opencv-python>=4.8.0",
+    "scikit-image>=0.21.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+    "tensorflow==2.20.0",
+    "keras==3.11.3",
+
+    # Authentication
+    "supabase>=2.0.0",
+    "pyjwt>=2.8.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "email-validator>=2.0.0",
+
+    # Utilities
+    "structlog>=23.2.0",
+    "loguru>=0.7.0",
+    "redis>=5.2.1",
+    "dramatiq>=1.15.0",
+    "prefect>=2.14.0",
+    "httpx[http2]>=0.25.0",
+    "python-dotenv>=1.0.0",
+    "tenacity==9.0.0",
+    "websockets==14.2.0",
+    "bleach",
+    "sentry-sdk[fastapi]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5.7",
+    "mypy>=1.10.0",
+    "black>=24.4.2",
+    "pre-commit>=3.5.0",
+    "pytest==8.3.5",
+    "pytest-asyncio==0.26.0",
+    "pytest-cov==6.1.1",
+    "pytest-mock==3.14.0",
+    "factory-boy==3.3.3",
+    "moto==5.1.4",
+    "coverage==7.8.0",
+    "httpx==0.28.1",
+    "ipdb==0.13.13",
+    "ipykernel==6.30.1",
+    "ipython==9.5.0",
+    "mkdocs==1.5.3",
+]
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "slow: Slow running tests",
+]

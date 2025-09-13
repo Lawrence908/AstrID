@@ -1,0 +1,27 @@
+{
+    "python.defaultInterpreterPath": "./.venv/bin/python",
+    "python.analysis.extraPaths": [
+        "./src"
+    ],
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.formatting.provider": "black",
+    "python.languageServer": "Pylance",
+    "pylance.analysis.autoSearchPaths": true,
+    "pylance.analysis.extraPaths": [
+        "./src"
+    ],
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/.hg/store/**": true,
+        "**/.git/**": true,
+        "**/node_modules/**": true,
+        "**/.vscode/**": true,
+        "**/__pycache__/**": true,
+        "**/*.pyc": true
+    }
+}

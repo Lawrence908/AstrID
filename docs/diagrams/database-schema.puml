@@ -1,0 +1,269 @@
+@startuml AstrID Database Schema
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID Database Schema
+
+package "Observations Domain" {
+    entity Survey {
+        * id : UUID
+        * name : String(100)
+        description : Text
+        base_url : String(500)
+        api_endpoint : String(500)
+        is_active : Boolean
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity Observation {
+        * id : UUID
+        * survey_id : UUID
+        * observation_id : String(255)
+        * ra : Numeric(10,7)
+        * dec : Numeric(10,7)
+        * observation_time : DateTime
+        * filter_band : String(50)
+        * exposure_time : Numeric(10,3)
+        * fits_url : String(1000)
+        pixel_scale : Numeric(8,4)
+        image_width : Integer
+        image_height : Integer
+        airmass : Numeric(5,2)
+        seeing : Numeric(6,3)
+        status : ObservationStatus
+        fits_file_path : String(500)
+        thumbnail_path : String(500)
+        created_at : DateTime
+        updated_at : DateTime
+    }
+}
+
+package "Preprocessing Domain" {
+    entity PreprocessRun {
+        * id : UUID
+        * observation_id : UUID
+        status : PreprocessRunStatus
+        calibration_applied : Boolean
+        wcs_aligned : Boolean
+        registration_quality : Numeric(5,3)
+        processed_fits_path : String(500)
+        wcs_info : JSONB
+        started_at : DateTime
+        completed_at : DateTime
+        processing_time_seconds : Integer
+        error_message : Text
+        retry_count : Integer
+        created_at : DateTime
+        updated_at : DateTime
+    }
+}
+
+package "Differencing Domain" {
+    entity DifferenceRun {
+        * id : UUID
+        * observation_id : UUID
+        reference_observation_id : UUID
+        status : DifferenceRunStatus
+        algorithm : String(50)
+        parameters : JSONB
+        difference_image_path : String(500)
+        significance_map_path : String(500)
+        noise_level : Numeric(10,6)
+        detection_threshold : Numeric(10,6)
+        candidates_found : Integer
+        started_at : DateTime
+        completed_at : DateTime
+        processing_time_seconds : Integer
+        error_message : Text
+        retry_count : Integer
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity Candidate {
+        * id : UUID
+        * difference_run_id : UUID
+        * observation_id : UUID
+        * ra : Numeric(10,7)
+        * dec : Numeric(10,7)
+        * pixel_x : Integer
+        * pixel_y : Integer
+        flux : Numeric(15,6)
+        flux_error : Numeric(15,6)
+        significance : Numeric(10,3)
+        snr : Numeric(8,3)
+        fwhm : Numeric(8,3)
+        ellipticity : Numeric(5,3)
+        position_angle : Numeric(6,2)
+        is_saturated : Boolean
+        is_blended : Boolean
+        is_edge : Boolean
+        status : CandidateStatus
+        created_at : DateTime
+        updated_at : DateTime
+    }
+}
+
+package "Detection Domain" {
+    entity Model {
+        * id : UUID
+        * name : String(100)
+        * version : String(50)
+        * model_type : ModelType
+        architecture : JSONB
+        hyperparameters : JSONB
+        training_dataset : String(200)
+        training_metrics : JSONB
+        precision : Numeric(5,4)
+        recall : Numeric(5,4)
+        f1_score : Numeric(5,4)
+        accuracy : Numeric(5,4)
+        is_active : Boolean
+        deployment_date : DateTime
+        model_path : String(500)
+        mlflow_run_id : String(100)
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity ModelRun {
+        * id : UUID
+        * model_id : UUID
+        observation_id : UUID
+        input_image_path : String(500)
+        output_mask_path : String(500)
+        confidence_map_path : String(500)
+        inference_time_ms : Integer
+        memory_usage_mb : Integer
+        total_predictions : Integer
+        high_confidence_predictions : Integer
+        status : ModelRunStatus
+        started_at : DateTime
+        completed_at : DateTime
+        error_message : Text
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity Detection {
+        * id : UUID
+        * model_run_id : UUID
+        * observation_id : UUID
+        * ra : Numeric(10,7)
+        * dec : Numeric(10,7)
+        * pixel_x : Integer
+        * pixel_y : Integer
+        * confidence_score : Numeric(5,4)
+        * detection_type : DetectionType
+        * model_version : String(50)
+        inference_time_ms : Integer
+        prediction_metadata : JSONB
+        status : DetectionStatus
+        is_validated : Boolean
+        validation_confidence : Numeric(5,4)
+        human_label : String(50)
+        created_at : DateTime
+        updated_at : DateTime
+    }
+}
+
+package "Curation Domain" {
+    entity ValidationEvent {
+        * id : UUID
+        * detection_id : UUID
+        * validator_id : String(100)
+        * is_valid : Boolean
+        label : String(50)
+        confidence_level : ConfidenceLevel
+        notes : Text
+        tags : JSONB
+        image_quality : QualityLevel
+        detection_quality : QualityLevel
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity Alert {
+        * id : UUID
+        * detection_id : UUID
+        * alert_type : String(50)
+        * priority : AlertPriority
+        * title : String(200)
+        * message : Text
+        alert_metadata : JSONB
+        status : AlertStatus
+        sent_at : DateTime
+        delivery_attempts : Integer
+        error_message : Text
+        created_at : DateTime
+        updated_at : DateTime
+    }
+}
+
+package "System Tables" {
+    entity SystemConfig {
+        * id : UUID
+        * key : String(100)
+        * value : JSONB
+        description : Text
+        is_active : Boolean
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity ProcessingJob {
+        * id : UUID
+        * job_type : String(50)
+        * entity_id : UUID
+        * entity_type : String(50)
+        status : ProcessingJobStatus
+        priority : Integer
+        workflow_id : String(100)
+        task_id : String(100)
+        retry_count : Integer
+        max_retries : Integer
+        scheduled_at : DateTime
+        started_at : DateTime
+        completed_at : DateTime
+        error_message : Text
+        error_details : JSONB
+        created_at : DateTime
+        updated_at : DateTime
+    }
+    
+    entity AuditLog {
+        * id : UUID
+        * entity_type : String(50)
+        * entity_id : UUID
+        * action : String(50)
+        user_id : String(100)
+        old_values : JSONB
+        new_values : JSONB
+        change_summary : Text
+        ip_address : String(45)
+        user_agent : Text
+        created_at : DateTime
+    }
+}
+
+' Relationships
+Survey ||--o{ Observation : "has many"
+Observation ||--o{ PreprocessRun : "has many"
+Observation ||--o{ DifferenceRun : "has many"
+Observation ||--o{ ModelRun : "has many"
+Observation ||--o{ Detection : "has many"
+
+DifferenceRun ||--o{ Candidate : "generates"
+DifferenceRun }o--|| Observation : "references"
+
+Model ||--o{ ModelRun : "has many"
+ModelRun ||--o{ Detection : "creates"
+ModelRun }o--|| Observation : "processes"
+
+Detection ||--o{ ValidationEvent : "has many"
+Detection ||--o{ Alert : "generates"
+
+@enduml

@@ -1,0 +1,25 @@
+-- Enable RLS on All Tables
+-- Run this after the RLS functions are created
+
+-- Core system tables
+ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+-- User data tables
+ALTER TABLE surveys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE observations ENABLE ROW LEVEL SECURITY;
+
+-- ML/Analysis tables
+ALTER TABLE models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE model_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE detections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
+
+-- Processing tables
+ALTER TABLE difference_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE preprocess_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
+
+-- Alert/validation tables
+ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE validation_events ENABLE ROW LEVEL SECURITY;
