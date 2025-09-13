@@ -330,10 +330,22 @@ class DataIngestionService:
         Returns:
             ObservationCreate object
         """
-        # Parse observation time
+        # Parse observation time - handle both MJD and ISO formats
         obs_time_str = mast_obs.get("obs_date")
         if obs_time_str:
-            obs_time = datetime.fromisoformat(obs_time_str.replace("Z", "+00:00"))
+            try:
+                # Try parsing as MJD (Modified Julian Date) first
+                if obs_time_str.replace(".", "").isdigit():
+                    # Convert MJD to datetime using astropy
+                    from astropy.time import Time
+                    mjd_time = Time(float(obs_time_str), format='mjd')
+                    obs_time = mjd_time.to_datetime(timezone=UTC)
+                else:
+                    # Try parsing as ISO format
+                    obs_time = datetime.fromisoformat(obs_time_str.replace("Z", "+00:00"))
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"Failed to parse observation time '{obs_time_str}': {e}")
+                obs_time = datetime.now(UTC)
         else:
             obs_time = datetime.now(UTC)
 
