@@ -272,7 +272,9 @@ class ProcessingBenchmark:
             config = {
                 'differencing': {'method': method, 'threshold': 3.0, 'min_area': 5},
                 'preprocessing': {'bias_correction': True, 'flat_correction': True, 'dark_correction': True,
-                                'cosmic_ray_removal': True, 'background_subtraction': True, 'noise_reduction': True}
+                                'cosmic_ray_removal': True, 'background_subtraction': True, 'noise_reduction': True},
+                'anomaly_detection': {'threshold': 0.5, 'use_unet': False, 'use_ml': True},
+                'quality_thresholds': {'min_snr': 5.0, 'min_contrast': 0.1, 'max_noise': 50.0}
             }
             
             pipeline = ProcessingPipeline(config)
