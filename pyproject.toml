@@ -10,7 +10,7 @@ name = "astrid"
 version = "0.1.0"
 description = "Astronomical Identification: Temporal Dataset Preparation and Anomaly Detection"
 authors = [
-    {name = "Chris Lawrence", email = "chris.lawrence@viu.ca"}
+    {name = "Chris Lawrence", email = "chrislawrencedev@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"

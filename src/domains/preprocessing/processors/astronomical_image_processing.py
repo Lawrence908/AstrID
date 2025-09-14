@@ -122,7 +122,7 @@ class AstronomicalImageProcessor:
         """Estimate background using various methods."""
         if method == 'gaussian':
             # Use large Gaussian kernel to estimate background
-            kernel = Gaussian2DKernel(sigma=20, x_stddev=20, y_stddev=20)
+            kernel = Gaussian2DKernel(x_stddev=20, y_stddev=20)
             background = convolve(image, kernel)
         elif method == 'morphology':
             # Use morphological operations
