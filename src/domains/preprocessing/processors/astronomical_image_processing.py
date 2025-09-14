@@ -63,7 +63,21 @@ class AstronomicalImageProcessor:
         Returns:
             Tuple of (processed_image, quality_metrics)
         """
-        processed = image.copy().astype(float)
+        # Ensure input is 2D for astronomical processing
+        if image.ndim == 3:
+            # Convert RGB to grayscale using standard weights
+            if image.shape[-1] == 3:
+                processed = 0.299 * image[..., 0] + 0.587 * image[..., 1] + 0.114 * image[..., 2]
+            else:
+                # For other 3D cases, take mean across last dimension
+                processed = np.mean(image, axis=-1)
+        elif image.ndim == 2:
+            processed = image.copy()
+        else:
+            # For higher dimensions, flatten to 2D
+            processed = np.mean(image, axis=tuple(range(image.ndim - 2)))
+        
+        processed = processed.astype(float)
         quality_metrics = {}
         
         # 1. Bias correction (simplified - in real implementation would use bias frames)
