@@ -136,7 +136,8 @@ class AstronomicalImageProcessor:
         """Estimate background using various methods."""
         if method == 'gaussian':
             # Use large Gaussian kernel to estimate background
-            kernel = Gaussian2DKernel(x_stddev=20, y_stddev=20)
+            # Ensure kernel size is odd (required for convolution)
+            kernel = Gaussian2DKernel(x_stddev=20, y_stddev=20, x_size=41, y_size=41)
             background = convolve(image, kernel)
         elif method == 'morphology':
             # Use morphological operations
@@ -200,8 +201,8 @@ class ImageDifferencingProcessor:
         reference_image: np.ndarray,
         method: str = 'zogy',
         *,
-        psf_science: Optional[np.ndarray] = None,
-        psf_reference: Optional[np.ndarray] = None,
+        psf_science: Optional[Gaussian2DKernel] = None,
+        psf_reference: Optional[Gaussian2DKernel] = None,
         noise_science: Optional[np.ndarray] = None,
         noise_reference: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, Dict[str, float]]:
@@ -233,8 +234,8 @@ class ImageDifferencingProcessor:
         self,
         science_image: np.ndarray,
         reference_image: np.ndarray,
-        psf_science: Optional[np.ndarray] = None,
-        psf_reference: Optional[np.ndarray] = None,
+        psf_science: Optional[Gaussian2DKernel] = None,
+        psf_reference: Optional[Gaussian2DKernel] = None,
         noise_science: Optional[np.ndarray] = None,
         noise_reference: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, Dict[str, float]]:
@@ -339,13 +340,15 @@ class ImageDifferencingProcessor:
         
         return noise_map
 
-    def create_gaussian_psf(self, shape: Tuple[int, int], sigma: float = 1.0) -> np.ndarray:
-        """Create a Gaussian PSF."""
-        y, x = np.ogrid[:shape[0], :shape[1]]
-        center_y, center_x = shape[0] // 2, shape[1] // 2
+    def create_gaussian_psf(self, shape: Tuple[int, int], sigma: float = 1.0) -> Gaussian2DKernel:
+        """Create a Gaussian PSF kernel."""
+        # Ensure kernel size is odd (required for convolution)
+        # Use a reasonable size based on sigma, but ensure it's odd
+        kernel_size = max(7, int(6 * sigma) + 1)  # At least 7x7, ensure odd
+        if kernel_size % 2 == 0:
+            kernel_size += 1
         
-        psf = np.exp(-((x - center_x)**2 + (y - center_y)**2) / (2 * sigma**2))
-        return psf / np.sum(psf)
+        return Gaussian2DKernel(x_stddev=sigma, y_stddev=sigma, x_size=kernel_size, y_size=kernel_size)
 
 
 class SourceDetectionProcessor:
