@@ -59,6 +59,8 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "tensorflow==2.20.0",
     "keras==3.11.3",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
 
     # Authentication
     "supabase>=2.0.0",

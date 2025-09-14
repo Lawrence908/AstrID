@@ -79,6 +79,9 @@ class AdvancedFITSProcessor:
         Returns:
             Path to the created overlay image
         """
+        if not MATPLOTLIB_AVAILABLE or plt is None:
+            raise ImportError("matplotlib is required for creating overlay plots")
+            
         fig = plt.figure(figsize=(7, 7))
         ax = fig.add_subplot(111, projection=wcs)
 
@@ -113,6 +116,9 @@ class AdvancedFITSProcessor:
         Returns:
             FITS ImageHDU containing the image data
         """
+        if not CV2_AVAILABLE or cv2 is None:
+            raise ImportError("opencv-python is required for image conversion")
+            
         # Read the image
         image_data = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
