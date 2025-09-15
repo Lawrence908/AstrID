@@ -81,6 +81,7 @@ dependencies = [
     "websockets==14.2.0",
     "bleach",
     "sentry-sdk[fastapi]",
+    "reproject>=0.12.0",
 ]
 
 [project.optional-dependencies]
