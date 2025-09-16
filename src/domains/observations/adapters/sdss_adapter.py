@@ -1,6 +1,6 @@
 """Sloan Digital Sky Survey (SDSS) data adapter."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -319,9 +319,9 @@ class SDSSAdapter(SurveyAdapter):
         # SDSS uses Modified Julian Date
         mjd = raw_data.get("mjd") or raw_data.get("t_min")
         if mjd is not None:
-            # Convert MJD to datetime
+            # Convert MJD to datetime (UTC)
             timestamp = (float(mjd) - 2440587.5) * 86400.0
-            return datetime.fromtimestamp(timestamp)
+            return datetime.fromtimestamp(timestamp, tz=UTC)
 
         # Fallback: try to extract from date fields
         obs_date = raw_data.get("date_obs") or raw_data.get("observation_date")
