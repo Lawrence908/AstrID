@@ -67,7 +67,7 @@
 
 ### Core Infrastructure
 
-#### ASTR-69: Development Environment Setup
+#### ASTR-69: Development Environment Setup ✅ **COMPLETED**
 - **Project**: ASTRID-INFRA
 - **Priority**: P1 (Critical)
 - **Labels**: `infrastructure`, `high-priority`
@@ -80,7 +80,7 @@
   - [ ] Set up Docker development environment
   - [ ] Configure environment variables and secrets
 
-#### ASTR-70: Database Setup and Migrations
+#### ASTR-70: Database Setup and Migrations ✅ **COMPLETED**
 - **Project**: ASTRID-INFRA
 - **Priority**: P1 (Critical)
 - **Labels**: `infrastructure`, `database`, `high-priority`
@@ -93,7 +93,7 @@
   - [ ] Create Alembic migration scripts
   - [ ] Set up test database configuration
 
-#### ASTR-71: Cloud Storage Integration
+#### ASTR-71: Cloud Storage Integration ✅ **COMPLETED**
 - **Project**: ASTRID-INFRA
 - **Priority**: P2 (High)
 - **Labels**: `infrastructure`
@@ -108,7 +108,7 @@
 
 ### 🔐 Authentication & Security
 
-#### ASTR-72: Supabase Integration
+#### ASTR-72: Supabase Integration ✅ **COMPLETED**
 - **Project**: ASTRID-INFRA
 - **Priority**: P2 (High)
 - **Labels**: `infrastructure`, `security`
@@ -344,11 +344,12 @@
 - **Estimated Time**: 4 days
 - **Dependencies**: ASTR-73, ASTR-81
 - **Description**: Implement core API endpoints for all domains
+- **Status**: ✅ **COMPLETED**
 - **Subtasks**:
-  - [X] Implement observations endpoints
-  - [X] Add detections endpoints
-  - [X] Create streaming endpoints (SSE)
-  - [X] Add health check and monitoring endpoints
+  - [x] Implement observations endpoints
+  - [x] Add detections endpoints
+  - [x] Create streaming endpoints (SSE)
+  - [x] Add health check and monitoring endpoints
 
 
 
@@ -509,11 +510,12 @@
 - **Estimated Time**: 1 day
 - **Dependencies**: ASTR-69
 - **Description**: Configure code quality and formatting tools
+- **Status**: ✅ **COMPLETED**
 - **Subtasks**:
-  - [ ] Configure Ruff for linting
-  - [ ] Set up MyPy for type checking
-  - [ ] Implement Black code formatting
-  - [ ] Add pre-commit hooks
+  - [x] Configure Ruff for linting
+  - [x] Set up MyPy for type checking
+  - [x] Implement Black code formatting
+  - [x] Add pre-commit hooks
 
 ## Epic: Deployment & Operations
 
@@ -526,11 +528,12 @@
 - **Estimated Time**: 2 days
 - **Dependencies**: ASTR-84
 - **Description**: Containerize all services for deployment
+- **Status**: ✅ **COMPLETED**
 - **Subtasks**:
-  - [ ] Create API Dockerfile
-  - [ ] Create worker Dockerfile
-  - [ ] Set up Docker Compose for development
-  - [ ] Implement health checks
+  - [x] Create API Dockerfile
+  - [x] Create worker Dockerfile
+  - [x] Set up Docker Compose for development
+  - [x] Implement health checks
 
 ### Production Deployment
 
@@ -601,15 +604,15 @@
 ## Priority Matrix
 
 ### High Priority (Phase 1: Sept-Oct 2025)
-- **ASTR-69**: Development environment setup (P1) 
-- **ASTR-70**: Database setup (P1)
+- **ASTR-69**: Development environment setup (P1) ✅ **COMPLETED**
+- **ASTR-70**: Database setup (P1) ✅ **COMPLETED**
 - **ASTR-73**: Observation models (P1) ✅ **COMPLETED**
-- **ASTR-84**: Core API endpoints (P1) 
+- **ASTR-84**: Core API endpoints (P1) ✅ **COMPLETED**
 - **ASTR-93**: Test framework (P1)
 
 ### Medium Priority (Phase 2: Nov-Dec 2025)
-- **ASTR-76**: Image preprocessing (P2)
-- **ASTR-78**: Image differencing (P2)
+- **ASTR-76**: Image preprocessing (P2) ✅ **COMPLETED**
+- **ASTR-78**: Image differencing (P2) ✅ **COMPLETED**
 - **ASTR-80**: U-Net integration (P2)
 - **ASTR-88**: MLflow setup (P2)
 - **ASTR-91**: Workflow orchestration (P2)
