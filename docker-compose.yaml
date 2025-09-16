@@ -196,10 +196,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: astrid-frontend-dev
     ports:
-      - "3000:3000"
+      - "3010:3010"
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - PORT=3010
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -214,8 +215,8 @@ services:
         # Fix ownership of the app directory and ensure nextjs user can write
         chown -R nextjs:nodejs /app &&
         chmod -R 755 /app &&
-        # Switch to nextjs user and start the development server
-        su-exec nextjs npm run dev
+        # Switch to nextjs user and start the development server on 3010
+        su-exec nextjs npx next dev -p 3010
       "
     user: "0:0"  # Run as root initially to fix permissions
 

@@ -56,25 +56,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-astrid-dark">
-      {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-astrid-blue">AstrID</h1>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-400">Planning Dashboard</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-400">localhost:3000</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Sidebar */}
         <div className="w-80 bg-gray-900 border-r border-gray-700 overflow-y-auto">
