@@ -1,5 +1,7 @@
 """Observations API routes."""
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,7 +31,9 @@ from src.domains.observations.schema import (
 )
 from src.domains.observations.schema import (
     ObservationRead,
+    ObservationStatus,
 )
+from src.domains.observations.service import ObservationService
 
 router = APIRouter()
 
@@ -149,6 +153,243 @@ async def get_observation(
     except AstrIDException as e:
         status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
         raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.put(
+    "/{observation_id}/status",
+    response_model=ResponseEnvelope[ObservationRead],
+    responses={
+        200: {"description": "Observation status updated successfully"},
+        400: {"description": "Invalid status transition"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Observation not found"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def update_observation_status(
+    observation_id: str,
+    status: ObservationStatus,
+    reason: str | None = Query(None, description="Reason for status change"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> JSONResponse:
+    """Update observation processing status."""
+    try:
+        from uuid import UUID
+
+        service = ObservationService(db)
+
+        updated_obs = await service.process_observation_status_change(
+            observation_id=UUID(observation_id),
+            new_status=status,
+            reason=reason,
+            changed_by=getattr(current_user, "username", "system"),
+        )
+
+        if not updated_obs:
+            raise ResourceNotFoundError(
+                message=f"Observation with ID {observation_id} not found",
+                error_code="OBSERVATION_NOT_FOUND",
+                details={"observation_id": observation_id},
+            )
+
+        return create_response(updated_obs)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except AstrIDException as e:
+        status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.get(
+    "/search",
+    response_model=ResponseEnvelope[list[ObservationResponse]],
+    responses={
+        200: {"description": "Observations found successfully"},
+        400: {"description": "Invalid search parameters"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def search_observations_by_coordinates(
+    ra: float = Query(..., description="Right Ascension in degrees (0-360)"),
+    dec: float = Query(..., description="Declination in degrees (-90 to 90)"),
+    radius: float = Query(0.1, description="Search radius in degrees"),
+    limit: int = Query(100, le=1000, description="Maximum number of results"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Search for observations by coordinates within a circular region."""
+    try:
+        # Validate coordinates
+        if not (0 <= ra <= 360):
+            raise HTTPException(
+                status_code=400, detail="RA must be between 0 and 360 degrees"
+            )
+        if not (-90 <= dec <= 90):
+            raise HTTPException(
+                status_code=400, detail="Dec must be between -90 and 90 degrees"
+            )
+        if radius <= 0:
+            raise HTTPException(status_code=400, detail="Radius must be positive")
+
+        repo = ObservationRepository(db)
+        observations = await repo.get_by_coordinates(ra, dec, radius)
+
+        # Limit results
+        observations = observations[:limit]
+
+        # Convert to response format
+        response_observations = []
+        for obs in observations:
+            # Get survey name (simplified for now)
+            survey_name = obs.survey.name if obs.survey else "Unknown"
+
+            response_obs = ObservationResponse(
+                id=str(obs.id),
+                survey=survey_name,
+                observation_id=obs.observation_id,
+                ra=obs.ra,
+                dec=obs.dec,
+                observation_time=obs.observation_time.isoformat(),
+                filter_band=obs.filter_band,
+                exposure_time=obs.exposure_time,
+                fits_url=obs.fits_url,
+                status=obs.status.value,
+                created_at=obs.created_at.isoformat(),
+                updated_at=obs.updated_at.isoformat(),
+            )
+            response_observations.append(response_obs)
+
+        return create_response(response_observations)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
+
+
+@router.get(
+    "/metrics/{observation_id}",
+    responses={
+        200: {"description": "Observation metrics calculated successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Observation not found"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def get_observation_metrics(
+    observation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Get calculated metrics and derived values for an observation."""
+    try:
+        from uuid import UUID
+
+        service = ObservationService(db)
+
+        # Get observation first
+        observation = await service.get_observation_by_id(UUID(observation_id))
+        if not observation:
+            raise ResourceNotFoundError(
+                message=f"Observation with ID {observation_id} not found",
+                error_code="OBSERVATION_NOT_FOUND",
+                details={"observation_id": observation_id},
+            )
+
+        # Calculate metrics
+        metrics = await service.calculate_observation_metrics(observation)
+
+        return create_response(metrics)
+
+    except AstrIDException as e:
+        status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Metrics calculation failed: {str(e)}"
+        ) from e
+
+
+@router.get(
+    "/survey/{survey_id}/summary",
+    responses={
+        200: {"description": "Survey observation summary retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Survey not found"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def get_survey_observation_summary(
+    survey_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Get comprehensive summary of observations for a survey."""
+    try:
+        from uuid import UUID
+
+        service = ObservationService(db)
+        summary = await service.get_survey_observation_summary(UUID(survey_id))
+
+        return create_response(summary)
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Summary generation failed: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/validate",
+    responses={
+        200: {"description": "Observation data is valid"},
+        400: {"description": "Validation failed"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)  # type: ignore[misc]
+async def validate_observation_data(
+    observation: DomainObservationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Validate observation data without creating the observation."""
+    try:
+        service = ObservationService(db)
+        is_valid = await service.validate_observation_data(observation)
+
+        result = {
+            "is_valid": is_valid,
+            "observation_id": observation.observation_id,
+            "survey_id": str(observation.survey_id),
+            "validation_passed": True,
+            "message": "Observation data is valid",
+        }
+
+        return create_response(result)
+
+    except Exception as e:
+        result = {
+            "is_valid": False,
+            "observation_id": observation.observation_id,
+            "survey_id": str(observation.survey_id),
+            "validation_passed": False,
+            "message": str(e),
+            "error_type": type(e).__name__,
+        }
+        return create_response(result, status_code=400)
 
 
 @router.post(

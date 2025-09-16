@@ -264,9 +264,19 @@ class TestDatasetGenerator:
 
             # Add some random sources
             for _ in range(np.random.randint(3, 8)):
-                y_src, x_src = np.random.randint(0, image_size[0], 2)
+                y_src, x_src = (
+                    np.random.randint(0, image_size[0]),
+                    np.random.randint(0, image_size[1]),
+                )
                 flux = np.random.uniform(20, 100)
-                img[y_src - 2 : y_src + 3, x_src - 2 : x_src + 3] += flux
+
+                # Add bounds checking to prevent IndexError
+                y_min = max(0, y_src - 2)
+                y_max = min(image_size[0], y_src + 3)
+                x_min = max(0, x_src - 2)
+                x_max = min(image_size[1], x_src + 3)
+
+                img[y_min:y_max, x_min:x_max] += flux
 
             images.append(img)
 
