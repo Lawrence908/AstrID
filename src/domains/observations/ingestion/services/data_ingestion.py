@@ -526,7 +526,7 @@ class DataIngestionService:
                 galactic_coords = coords.galactic
 
                 # Avoid ±10 degrees around the galactic plane
-                if abs(galactic_coords.b.degree) > 10:
+                if abs(galactic_coords.b.deg) > 10:
                     return ra, dec
 
             self.logger.warning("Could not find coordinates avoiding galactic plane")

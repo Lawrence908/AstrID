@@ -309,7 +309,7 @@ class SyntheticAnomalyGenerator:
                 import cv2
 
                 cv2.line(
-                    base_img, (x1, y1), (x2, y2), (int(np.random.uniform(50, 100)),), 2
+                    base_img, (x1, y1), (x2, y2), int(np.random.uniform(50, 100)), 2
                 )
 
             images.append(base_img)
