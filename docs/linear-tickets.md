@@ -133,9 +133,9 @@
 - **Dependencies**: ASTR-73
 - **Description**: Implement FITS file processing and WCS handling
 - **Subtasks**:
-  - [ ] Implement FITS file reading and writing
-  - [ ] Add WCS (World Coordinate System) handling
-  - [ ] Create image metadata extraction
+  - [x] Implement FITS file reading and writing
+  - [x] Add WCS (World Coordinate System) handling
+  - [x] Create image metadata extraction
   - [ ] Implement star catalog integration
 
 ### 🖼️ Preprocessing Domain
@@ -149,9 +149,9 @@
 - **Description**: Implement image calibration and preprocessing pipeline
 - **Subtasks**:
   - [ ] Implement bias/dark/flat calibration
-  - [ ] Add WCS alignment and registration
-  - [ ] Create image quality assessment
-  - [ ] Implement preprocessing pipeline orchestration
+  - [x] Add WCS alignment and registration
+  - [x] Create image quality assessment
+  - [x] Implement preprocessing pipeline orchestration
 
 #### ASTR-77: Astronomical Image Processing
 - **Project**: ASTRID-CORE
@@ -176,10 +176,10 @@
 - **Dependencies**: ASTR-76
 - **Description**: Implement image differencing algorithms for anomaly detection
 - **Subtasks**:
-  - [ ] Implement ZOGY algorithm
-  - [ ] Add classic differencing methods
-  - [ ] Create reference image selection logic
-  - [ ] Implement difference image generation
+  - [x] Implement ZOGY algorithm
+  - [x] Add classic differencing methods
+  - [x] Create reference image selection logic
+  - [x] Implement difference image generation
 
 #### ASTR-79: Source Extraction
 - **Project**: ASTRID-CORE
@@ -218,9 +218,9 @@
 - **Description**: Complete anomaly detection service implementation
 - **Subtasks**:
   - [ ] Implement detection service layer
-  - [ ] Add detection validation logic
-  - [ ] Create detection result storage
-  - [ ] Implement detection metrics calculation
+  - [x] Add detection validation logic
+  - [x] Create detection result storage
+  - [x] Implement detection metrics calculation
 
 ### 👥 Curation Domain
 

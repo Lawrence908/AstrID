@@ -89,7 +89,7 @@ class MASTClient:
             to_display_image_fn = _to_disp
 
         info: dict[str, Any] = {"source": "ps1", "filter": filt, "error": None}
-        
+
         # Validate coordinates
         if not (0 <= ra_deg <= 360):
             info["error"] = f"Invalid RA: {ra_deg} (must be 0-360 degrees)"
@@ -97,59 +97,66 @@ class MASTClient:
         if not (-90 <= dec_deg <= 90):
             info["error"] = f"Invalid Dec: {dec_deg} (must be -90 to +90 degrees)"
             return None, info
-            
+
         # Format coordinates more precisely for PS1 service
         ra_str = f"{ra_deg:.6f}"
         dec_str = f"{dec_deg:+.6f}"  # Include + sign for positive declinations
-        
+
         headers = {
             "Accept": "application/fits, application/octet-stream, image/jpeg",
             "User-Agent": "AstrID-PS1/1.0 (+https://github.com/AstrID)",
         }
-        
+
         # First, get the PS1 cutout page to find the actual FITS file path
         cutout_page_url = f"https://ps1images.stsci.edu/cgi-bin/ps1cutouts?pos={ra_str}+{dec_str}&filter={filt}&format=fits&size={size_pixels}"
-        
+
         # Try to extract the FITS file path from the HTML response
         try:
             import re
-            page_resp = requests.get(cutout_page_url, timeout=timeout_sec, headers=headers)
-            if page_resp.status_code == 200 and "text/html" in page_resp.headers.get("Content-Type", "").lower():
+
+            page_resp = requests.get(
+                cutout_page_url, timeout=timeout_sec, headers=headers
+            )
+            if (
+                page_resp.status_code == 200
+                and "text/html" in page_resp.headers.get("Content-Type", "").lower()
+            ):
                 # Look for direct FITS file links first
                 fits_file_pattern = r'href="(/rings\.v3\.skycell/[^"]+\.fits)"'
                 fits_file_matches = re.findall(fits_file_pattern, page_resp.text)
-                
+
                 # Look for FITS cutout links in the HTML
-                fits_cutout_pattern = r'href="//ps1images\.stsci\.edu/cgi-bin/fitscut\.cgi\?([^"]+)"'
+                fits_cutout_pattern = (
+                    r'href="//ps1images\.stsci\.edu/cgi-bin/fitscut\.cgi\?([^"]+)"'
+                )
                 fits_cutout_matches = re.findall(fits_cutout_pattern, page_resp.text)
-                
+
                 urls_to_try = []
-                
-                print(f"Found {len(fits_file_matches)} direct FITS files and {len(fits_cutout_matches)} FITS cutout links")
-                
+
                 # Try direct FITS file first (full image, not cutout)
                 if fits_file_matches:
                     fits_file_url = f"https://ps1images.stsci.edu{fits_file_matches[0]}"
                     urls_to_try.append(fits_file_url)
-                    print(f"Found direct FITS file: {fits_file_url}")
-                
+
                 # Try FITS cutout
                 if fits_cutout_matches:
                     fits_params = fits_cutout_matches[0]
                     # Ensure we're requesting FITS format
                     if "format=fits" not in fits_params:
                         fits_params = fits_params.replace("format=jpeg", "format=fits")
-                    fits_cutout_url = f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?{fits_params}"
+                    fits_cutout_url = (
+                        f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?{fits_params}"
+                    )
                     urls_to_try.append(fits_cutout_url)
-                    print(f"Found FITS cutout: {fits_cutout_url}")
-                
+
                 # Add JPEG fallback
                 if fits_cutout_matches:
                     fits_params = fits_cutout_matches[0]
-                    jpeg_url = f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?{fits_params}".replace("format=fits", "format=jpeg").replace("&asinh=True", "")
+                    jpeg_url = f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?{fits_params}".replace(
+                        "format=fits", "format=jpeg"
+                    ).replace("&asinh=True", "")
                     urls_to_try.append(jpeg_url)
-                    print(f"Added JPEG fallback: {jpeg_url}")
-                
+
                 if not urls_to_try:
                     # Fallback to original URLs if parsing fails
                     urls_to_try = [
@@ -163,27 +170,40 @@ class MASTClient:
                     f"https://ps1images.stsci.edu/cgi-bin/ps1cutouts?pos={ra_str}+{dec_str}&filter={filt}&format=jpeg&size={size_pixels}",
                 ]
         except Exception as e:
-            print(f"Error parsing PS1 page: {e}")
+            # Log error but continue with fallback URLs
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Error parsing PS1 page: {e}")
             # Fallback URLs
             urls_to_try = [
                 f"https://ps1images.stsci.edu/cgi-bin/ps1cutouts?pos={ra_str}+{dec_str}&filter={filt}&format=fits&size={size_pixels}",
                 f"https://ps1images.stsci.edu/cgi-bin/ps1cutouts?pos={ra_str}+{dec_str}&filter={filt}&format=jpeg&size={size_pixels}",
-                    ]
+            ]
 
         def _attempt(url: str) -> tuple[Any | None, str | None]:
             try:
                 resp = requests.get(url, timeout=timeout_sec, headers=headers)
                 resp.raise_for_status()
                 ctype = resp.headers.get("Content-Type", "").lower()
-                
+
                 # Check for HTML error responses
                 if "text/html" in ctype:
                     # Try to extract error message from HTML
-                    content_str = resp.content.decode('utf-8', errors='ignore')
-                    if "error" in content_str.lower() or "not found" in content_str.lower():
-                        return None, f"PS1 service error (HTML response): {content_str[:200]}..."
-                    return None, f"PS1 returned HTML instead of image data: {content_str[:100]}..."
-                
+                    content_str = resp.content.decode("utf-8", errors="ignore")
+                    if (
+                        "error" in content_str.lower()
+                        or "not found" in content_str.lower()
+                    ):
+                        return (
+                            None,
+                            f"PS1 service error (HTML response): {content_str[:200]}...",
+                        )
+                    return (
+                        None,
+                        f"PS1 returned HTML instead of image data: {content_str[:100]}...",
+                    )
+
                 if "fits" in ctype or resp.content.startswith(b"SIMPLE"):
                     with fits.open(
                         BytesIO(resp.content), ignore_missing_simple=True
@@ -218,24 +238,24 @@ class MASTClient:
         # Try all URL formats with retries
         backoffs = [0.0, 0.5, 1.0]
         last_err: str | None = None
-        
-        for i, delay in enumerate(backoffs):
+
+        for _i, delay in enumerate(backoffs):
             if delay:
                 time.sleep(delay)
-                
+
             # Try each URL format
-            for j, url in enumerate(urls_to_try):
-                print(f"Trying PS1 URL {j+1}/{len(urls_to_try)}: {url}")
+            for _j, url in enumerate(urls_to_try):
                 data, err = _attempt(url)
                 if data is not None:
                     format_type = "fits" if "format=fits" in url else "jpeg"
                     return to_display_image_fn(data), {**info, "format": format_type}
                 last_err = err
-                if i == 0 and j == 0:  # Log the first attempt for debugging
-                    print(f"PS1 first attempt failed: {err}")
 
         # If all PS1 attempts failed, try a simple fallback
-        print("All PS1 attempts failed, trying simple coordinate validation...")
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug("All PS1 attempts failed, trying simple coordinate validation...")
         if last_err and "HTML" in last_err:
             info["error"] = f"PS1 service returned HTML error: {last_err}"
         else:
@@ -284,15 +304,17 @@ class MASTClient:
 
             # Import astroquery here to handle missing dependency gracefully
             try:
-                from astroquery.mast import Observations  # type: ignore
-                from astropy.coordinates import SkyCoord  # type: ignore
                 import astropy.units as u  # type: ignore
+                from astropy.coordinates import SkyCoord  # type: ignore
+                from astroquery.mast import Observations  # type: ignore
             except ImportError as e:
-                self.logger.warning(f"astroquery not available, falling back to mock data: {e}")
+                self.logger.warning(
+                    f"astroquery not available, falling back to mock data: {e}"
+                )
                 return self._create_mock_observation(ra, dec, data_rights)
 
             # Create coordinate object
-            coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs')  # type: ignore
+            coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs")  # type: ignore
 
             # Build query parameters
             query_params = {
@@ -308,7 +330,9 @@ class MASTClient:
             # We'll filter by observation date after getting results
 
             # Query MAST
-            self.logger.info(f"Querying MAST for position ({ra}, {dec}) with radius {radius}°")
+            self.logger.info(
+                f"Querying MAST for position ({ra}, {dec}) with radius {radius}°"
+            )
             self.logger.debug(f"Query parameters: {query_params}")
             obs_table = Observations.query_region(**query_params)  # type: ignore
             self.logger.info(f"MAST query returned {len(obs_table)} raw observations")
@@ -318,21 +342,22 @@ class MASTClient:
             filtered_count = 0
             for row in obs_table:
                 mission = str(row.get("obs_collection", ""))
-                
+
                 # Filter by missions if specified
                 if missions and mission not in missions:
                     filtered_count += 1
                     continue
-                
+
                 # Filter by time if specified
                 if start_time or end_time:
                     from astropy.time import Time
+
                     obs_time = row.get("t_min")
                     if obs_time is not None:
                         try:
                             obs_mjd = float(obs_time)
-                            obs_time_obj = Time(obs_mjd, format='mjd')
-                            
+                            obs_time_obj = Time(obs_mjd, format="mjd")
+
                             if start_time and obs_time_obj < Time(start_time):
                                 filtered_count += 1
                                 continue
@@ -343,7 +368,7 @@ class MASTClient:
                             # Skip observations with invalid time data
                             filtered_count += 1
                             continue
-                
+
                 obs_dict = {
                     "obs_id": str(row.get("obsid", "")),
                     "target_name": str(row.get("target_name", "")),
@@ -361,7 +386,9 @@ class MASTClient:
                 }
                 observations.append(obs_dict)
 
-            self.logger.info(f"Found {len(observations)} observations from MAST (filtered {filtered_count} total)")
+            self.logger.info(
+                f"Found {len(observations)} observations from MAST (filtered {filtered_count} total)"
+            )
             if missions:
                 self.logger.info(f"Filtered for missions: {missions}")
             if start_time or end_time:
@@ -377,7 +404,9 @@ class MASTClient:
             self.logger.warning("Falling back to mock data due to MAST query failure")
             return self._create_mock_observation(ra, dec, data_rights)
 
-    def _create_mock_observation(self, ra: float, dec: float, data_rights: str) -> list[dict[str, Any]]:
+    def _create_mock_observation(
+        self, ra: float, dec: float, data_rights: str
+    ) -> list[dict[str, Any]]:
         """Create mock observation data as fallback."""
         mock_observation = {
             "obs_id": f"mock_obs_{ra}_{dec}",
@@ -583,6 +612,91 @@ class MASTClient:
             self.logger.error(f"Error querying missions: {e}")
             raise
 
+    async def query_observations_by_configuration(
+        self,
+        config: Any,  # SurveyConfiguration type
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Query observations using a survey configuration.
+
+        Args:
+            config: SurveyConfiguration object with sky regions and missions
+            start_time: Start of observation time range (overrides config)
+            end_time: End of observation time range (overrides config)
+
+        Returns:
+            List of observation metadata dictionaries
+
+        USE CASE: Centralized configuration-driven observation queries
+        """
+        try:
+            all_observations = []
+
+            # Use config time window if not provided
+            if start_time is None:
+                start_time = datetime.now() - timedelta(days=config.time_window_days)
+            if end_time is None:
+                end_time = datetime.now()
+
+            # Extract mission names and filters from configuration
+            missions = [
+                mission.name for mission in config.missions if mission.is_active
+            ]
+
+            self.logger.info(
+                f"Querying {len(config.sky_regions)} sky regions for {len(missions)} missions"
+            )
+
+            # Query each sky region
+            for region in config.sky_regions:
+                if not region.is_active:
+                    self.logger.debug(f"Skipping inactive region: {region.name}")
+                    continue
+
+                self.logger.info(
+                    f"Querying region: {region.name} at ({region.ra_center}, {region.dec_center})"
+                )
+
+                # Query observations for this region
+                observations = await self.query_observations_by_position(
+                    ra=region.ra_center,
+                    dec=region.dec_center,
+                    radius=region.radius,
+                    missions=missions,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+
+                # Add region metadata to observations
+                for obs in observations:
+                    obs["region_name"] = region.name
+                    obs["region_priority"] = region.priority
+
+                all_observations.extend(observations)
+                self.logger.info(
+                    f"Found {len(observations)} observations in region {region.name}"
+                )
+
+            # Sort by region priority and observation date
+            all_observations.sort(
+                key=lambda x: (x.get("region_priority", 10), x.get("obs_date", ""))
+            )
+
+            # Limit results based on configuration
+            if len(all_observations) > config.max_observations_per_run:
+                all_observations = all_observations[: config.max_observations_per_run]
+                self.logger.info(
+                    f"Limited results to {config.max_observations_per_run} observations"
+                )
+
+            self.logger.info(f"Total observations found: {len(all_observations)}")
+            return all_observations
+
+        except Exception as e:
+            self.logger.error(f"Error querying observations by configuration: {e}")
+            raise
+
 
 # INTEGRATION EXAMPLE:
 # This shows how the MAST client would be used in the observation ingestion flow
@@ -611,13 +725,12 @@ async def example_usage():
     if observations:
         obs_id = observations[0]["obs_id"]
         products = await client.get_data_products(obs_id)
-        files = await client.download_files(products, "/tmp/downloads")
-        print(f"Downloaded {len(files)} files")
+        await client.download_files(products, "/tmp/downloads")
 
 
-# TODO: Integration points with AstrID:
-# 1. Connect to src/adapters/scheduler/flows/process_new.py ingest_window()
-# 2. Store downloaded files using R2 client
-# 3. Create Observation records in database
-# 4. Trigger preprocessing workflows
-# 5. Add configuration for target sky regions and missions
+# INTEGRATION COMPLETE:
+# ✅ 1. Connected to src/adapters/scheduler/flows/process_new.py ingest_window()
+# ✅ 2. Store downloaded files using R2 client
+# ✅ 3. Create Observation records in database
+# ✅ 4. Trigger preprocessing workflows
+# ✅ 5. Added configuration for target sky regions and missions
