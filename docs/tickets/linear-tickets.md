@@ -6,7 +6,7 @@
 **Team**: Chris Lawrence (Lead Developer)  
 **Timeline**: September 2025 - April 2026  
 **Status**: Core Development Phase  
-**Progress**: 1/32 tickets completed (3.1%)  
+**Progress**: 12/32 tickets completed (37.5%)  
 
 ## Recent Accomplishments
 
@@ -22,6 +22,16 @@
 - ✅ **Production Ready**: Full type annotations, documentation, and error handling
 
 **Impact**: This provides the foundational domain model that all other services will build upon. The observation processing pipeline is now ready for integration with preprocessing, differencing, and ML detection services.
+
+### ✅ September 16, 2025 - ASTR-76 Completed!
+**Major Milestone**: Image Preprocessing Services fully implemented and tested
+- ✅ Calibration: Bias/Dark/Flat master creation, application, validation, uncertainty
+- ✅ Alignment: WCS alignment, multi-image registration, quality metrics
+- ✅ Quality: Background/noise/cosmic rays/flatness/saturation, scoring
+- ✅ Pipeline: Orchestration with hooks and metrics
+- ✅ API: Preprocess/status/calibration-frame/quality/configure endpoints
+
+**Impact**: Science-ready calibrated and aligned images enable the Differencing and Detection domains. This unblocks ASTR-78 (Image Differencing).
 
 ## Linear Project Configuration
 
@@ -186,10 +196,10 @@
 - **Dependencies**: ASTR-73
 - **Description**: Integrate with external astronomical survey APIs
 - **Subtasks**:
-  - [ ] Integrate with MAST API for observations
-  - [ ] Integrate with SkyView for image data
-  - [ ] Implement survey-specific adapters
-  - [ ] Add observation metadata extraction
+  - [x] Integrate with MAST API for observations
+  - [x] Integrate with SkyView for image data
+  - [x] Implement survey-specific adapters
+  - [x] Add observation metadata extraction
 
 #### ASTR-75: FITS Processing Pipeline
 - **Project**: ASTRID-CORE
@@ -213,11 +223,14 @@
 - **Estimated Time**: 4 days
 - **Dependencies**: ASTR-75
 - **Description**: Implement image calibration and preprocessing pipeline
+ - **Status**: ✅ FULLY IMPLEMENTED & TESTED (September 16, 2025)
 - **Subtasks**:
-  - [ ] Implement bias/dark/flat calibration
+  - [x] Implement bias/dark/flat calibration
   - [x] Add WCS alignment and registration
   - [x] Create image quality assessment
   - [x] Implement preprocessing pipeline orchestration
+ 
+**Next Up**: Begin ASTR-78 (Image Differencing Algorithms)
 
 #### ASTR-77: Astronomical Image Processing
 - **Project**: ASTRID-CORE
