@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.adapters.api.routes import auth, stream
+from src.adapters.api.routes import auth, health, stream
 from src.core.api.response_wrapper import create_response
 from src.core.constants import (
     API_DESCRIPTION,
@@ -189,6 +189,7 @@ app.include_router(
     preprocessing_router, prefix="/preprocessing", tags=["preprocessing"]
 )
 app.include_router(stream.router, prefix="/stream", tags=["stream"])
+app.include_router(health.router, prefix="/health", tags=["health"])
 
 
 @app.get("/")  # type: ignore[misc]
@@ -208,7 +209,9 @@ async def root():
 
 @app.get("/health")  # type: ignore[misc]
 async def health_check():
-    """Health check endpoint with working service checks."""
+    """Simple health check endpoint - redirects to comprehensive health check."""
+    # For backward compatibility, provide a simple health response
+    # Full health checks are available at /health/ endpoints
     import time
     from datetime import datetime
 
