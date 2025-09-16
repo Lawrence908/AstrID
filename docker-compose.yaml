@@ -157,6 +157,7 @@ services:
       context: .
       dockerfile: Dockerfile.prefect
     container_name: astrid-prefect-worker-dev
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -172,6 +173,9 @@ services:
       - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
       - PYTHONPATH=/app/src
       - DEBUG=true
+      # Retry configuration for Prefect server connection
+      - PREFECT_WAIT_MAX_RETRIES=30
+      - PREFECT_WAIT_DELAY=2.0
     volumes:
       - .:/app
       - ./src:/app/src
@@ -183,7 +187,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["python", "-m", "prefect", "worker", "start", "--pool", "astrid-pool"]
+    # The startup script is now handled by the Dockerfile CMD
 
   # AstrID Frontend
   frontend:

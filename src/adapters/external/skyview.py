@@ -130,63 +130,58 @@ class SkyViewClient:
         fov_deg: float = 0.02,
         survey: str = "DSS",
         hips: str = "CDS/P/DSS2/color",
-        budget_sec: float = 45.0,
-        request_timeout: float = 30.0,
+        budget_sec: float = 30.0,  # Reduced timeout
+        request_timeout: float = 15.0,  # Reduced timeout
         to_display_image_fn=None,
     ) -> tuple[np.ndarray | None, dict[str, Any]]:
-        """Try SkyView first; on failure use CDS HiPS2FITS.
+        """Try CDS HiPS2FITS first (more reliable), then SkyView as fallback.
 
         Returns (image_for_display, info).
         """
         import time
 
-        if to_display_image_fn is None:
-            # Local fallback normalization if imaging utils not available
-            from src.adapters.imaging.utils import to_display_image as _to_disp
+        # Simple image normalization function if none provided
+        def simple_normalize(data):
+            """Simple image normalization for display."""
+            if data is None:
+                return None
+            data = np.asarray(data, dtype=float)
+            if data.size == 0:
+                return None
+            
+            # Handle multi-channel images (RGB, RGBA, etc.)
+            if data.ndim == 3:
+                # For multi-channel images, convert to grayscale or use RGB
+                if data.shape[0] == 3:  # RGB
+                    # Convert RGB to grayscale using standard weights
+                    data = 0.299 * data[0] + 0.587 * data[1] + 0.114 * data[2]
+                elif data.shape[0] == 4:  # RGBA
+                    # Use RGB channels, ignore alpha
+                    data = 0.299 * data[0] + 0.587 * data[1] + 0.114 * data[2]
+                else:
+                    # Take the first channel if unknown multi-channel format
+                    data = data[0]
+            
+            # Simple percentile normalization
+            p2, p98 = np.percentile(data, [2, 98])
+            if p98 > p2:
+                data = np.clip((data - p2) / (p98 - p2), 0, 1)
+            return data
 
-            to_display_image_fn = _to_disp
-            logger.warning("to_display_image_fn is None; using local fallback")
+        if to_display_image_fn is None:
+            to_display_image_fn = simple_normalize
+            logger.info("Using simple image normalization")
 
         info: dict[str, Any] = {
             "source": None,
+            "hips_duration_sec": None,
             "skyview_duration_sec": None,
-            "fallback_duration_sec": None,
             "error": None,
         }
 
         start = time.time()
 
-        # Try SkyView
-        if SkyView is not None:
-            try:
-                logger.info(f"Getting image list from SkyView for {survey}")
-                urls = SkyView.get_image_list(
-                    position=f"{ra_deg} {dec_deg}",
-                    survey=[survey],
-                    coordinates="ICRS",
-                    pixels=size_pixels,
-                )
-                info["skyview_duration_sec"] = time.time() - start
-                if urls and (time.time() - start) < budget_sec:
-                    logger.info(f"Getting images from SkyView for {survey}")
-                    images = SkyView.get_images(
-                        position=f"{ra_deg} {dec_deg}",
-                        survey=[survey],
-                        coordinates="ICRS",
-                        pixels=size_pixels,
-                    )
-                    if images:
-                        logger.info(f"Got images from SkyView for {survey}")
-                        hdu0 = images[0][0]
-                        raw = np.asarray(getattr(hdu0, "data", None))
-                        if raw is not None:
-                            disp = to_display_image_fn(raw)
-                            info["source"] = "skyview"
-                            return disp, info
-            except Exception as e:
-                info["error"] = f"SkyView error: {e}"
-
-        # Fallback to CDS HiPS2FITS
+        # Try CDS HiPS2FITS first (more reliable and faster)
         try:
             logger.info(f"Getting image from CDS HiPS2FITS for {survey}")
             hips_params = {
@@ -200,6 +195,7 @@ class SkyViewClient:
                 "format": "fits",
             }
             headers = {"Accept": "application/fits, application/octet-stream"}
+            
             r = requests.get(
                 "https://alasky.cds.unistra.fr/hips-image-services/hips2fits",
                 params=hips_params,
@@ -207,22 +203,55 @@ class SkyViewClient:
                 headers=headers,
             )
             r.raise_for_status()
-            ctype = r.headers.get("Content-Type", "").lower()
-            if "fits" not in ctype and not r.content.startswith(b"SIMPLE"):
-                raise ValueError(
-                    f"Unexpected content type from HiPS2FITS: {ctype or 'unknown'}"
-                )
-            logger.info(f"Got image from CDS HiPS2FITS for {survey}")
-            hdul = _fits.open(BytesIO(r.content), ignore_missing_simple=True)
-            data = np.asarray(hdul[0].data)
-            disp = to_display_image_fn(data)
-            info["source"] = "hips2fits"
-            info["fallback_duration_sec"] = time.time() - start
-            return disp, info
+            
+            # Check if we got valid FITS data
+            if r.content.startswith(b"SIMPLE") or "fits" in r.headers.get("Content-Type", "").lower():
+                logger.info(f"Got image from CDS HiPS2FITS for {survey}")
+                hdul = _fits.open(BytesIO(r.content), ignore_missing_simple=True)
+                data = np.asarray(hdul[0].data)
+                disp = to_display_image_fn(data)
+                info["source"] = "hips2fits"
+                info["hips_duration_sec"] = time.time() - start
+                return disp, info
+            else:
+                raise ValueError(f"Invalid response from HiPS2FITS: {r.headers.get('Content-Type', 'unknown')}")
+                
         except Exception as e:
             info["error"] = f"CDS HiPS2FITS error: {e}"
-            logger.error(f"Error getting image from CDS HiPS2FITS for {survey}: {e}")
-            return None, info
+            logger.warning(f"CDS HiPS2FITS failed: {e}")
+
+        # Fallback to SkyView (if available and within budget)
+        if SkyView is not None and (time.time() - start) < budget_sec:
+            try:
+                logger.info(f"Trying SkyView fallback for {survey}")
+                skyview_start = time.time()
+                
+                # Use a more direct approach
+                images = SkyView.get_images(
+                    position=f"{ra_deg} {dec_deg}",
+                    survey=[survey],
+                    coordinates="ICRS",
+                    pixels=size_pixels,
+                )
+                
+                info["skyview_duration_sec"] = time.time() - skyview_start
+                
+                if images and len(images) > 0:
+                    logger.info(f"Got images from SkyView for {survey}")
+                    hdu0 = images[0][0]
+                    raw = np.asarray(getattr(hdu0, "data", None))
+                    if raw is not None:
+                        disp = to_display_image_fn(raw)
+                        info["source"] = "skyview"
+                        return disp, info
+                        
+            except Exception as e:
+                info["error"] = f"SkyView error: {e}"
+                logger.warning(f"SkyView fallback failed: {e}")
+
+        # If all else fails, return None
+        logger.error(f"All image sources failed for {survey} at ({ra_deg}, {dec_deg})")
+        return None, info
 
     async def get_image_cutouts(
         self,

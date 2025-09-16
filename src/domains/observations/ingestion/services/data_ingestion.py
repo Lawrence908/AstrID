@@ -18,6 +18,8 @@ from src.adapters.imaging.fits_io import FITSProcessor
 from src.core.logging import configure_domain_logger
 from src.domains.observations.ingestion.processors import CoordinateProcessor
 from src.domains.observations.schema import ObservationCreate
+from src.domains.observations.survey_config import SurveyConfigurationRead
+from src.domains.observations.survey_config_service import SurveyConfigurationService
 
 
 class DataIngestionService:
@@ -28,6 +30,7 @@ class DataIngestionService:
         mast_client: MASTClient | None = None,
         skyview_client: SkyViewClient | None = None,
         r2_client: R2StorageClient | None = None,
+        survey_config_service: SurveyConfigurationService | None = None,
     ):
         """Initialize the data ingestion service.
 
@@ -35,6 +38,7 @@ class DataIngestionService:
             mast_client: MAST client for querying observations
             skyview_client: SkyView client for reference images
             r2_client: R2 storage client for file storage
+            survey_config_service: Service for managing survey configurations
         """
         self.logger = configure_domain_logger("observations.ingestion")
 
@@ -42,6 +46,7 @@ class DataIngestionService:
         self.mast_client = mast_client or MASTClient()
         self.skyview_client = skyview_client or SkyViewClient()
         self.r2_client = r2_client or R2StorageClient()
+        self.survey_config_service = survey_config_service
 
         # Initialize processors
         self.coord_processor = CoordinateProcessor()
@@ -110,6 +115,132 @@ class DataIngestionService:
         except Exception as e:
             self.logger.error(
                 f"Failed to ingest observations for position ({ra}, {dec}): {e}"
+            )
+            raise
+
+    async def ingest_observations_by_configuration(
+        self,
+        config: SurveyConfigurationRead,
+        survey_id: UUID,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[ObservationCreate]:
+        """Ingest observations using a survey configuration.
+
+        Args:
+            config: Survey configuration with sky regions and missions
+            survey_id: Survey ID to associate observations with
+            start_time: Override start time (optional)
+            end_time: Override end time (optional)
+
+        Returns:
+            List of ObservationCreate objects ready for database storage
+
+        USE CASE: Configuration-driven observation ingestion
+        """
+        try:
+            self.logger.info(
+                f"Ingesting observations using configuration: {config.name}"
+            )
+
+            # Query observations using the configuration
+            observations = await self.mast_client.query_observations_by_configuration(
+                config=config,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+            if not observations:
+                self.logger.info("No observations found for this configuration")
+                return []
+
+            # Convert to ObservationCreate objects
+            observation_creates = []
+            for obs_data in observations:
+                try:
+                    # Parse observation time
+                    obs_time_str = obs_data.get("obs_date", "")
+                    if obs_time_str:
+                        from astropy.time import Time
+
+                        obs_mjd = float(obs_time_str)
+                        astropy_time = Time(obs_mjd, format="mjd")
+                        # Convert to Python datetime
+                        obs_time = astropy_time.to_datetime()
+                        # Ensure it's a proper datetime object
+                        if not isinstance(obs_time, datetime):
+                            obs_time = datetime.now()
+                    else:
+                        obs_time = datetime.now()
+
+                    # Create observation
+                    obs_create = ObservationCreate(
+                        survey_id=survey_id,
+                        observation_id=obs_data.get("obs_id", ""),
+                        ra=float(obs_data.get("ra", 0.0)),
+                        dec=float(obs_data.get("dec", 0.0)),
+                        observation_time=obs_time,
+                        filter_band=obs_data.get("filters", "unknown"),
+                        exposure_time=float(obs_data.get("exposure_time", 0.0)),
+                        fits_url=obs_data.get("dataURL", ""),
+                        pixel_scale=None,  # Will be filled during preprocessing
+                        image_width=None,
+                        image_height=None,
+                        airmass=None,
+                        seeing=None,
+                    )
+
+                    observation_creates.append(obs_create)
+
+                except Exception as e:
+                    self.logger.warning(f"Failed to create observation from data: {e}")
+                    continue
+
+            self.logger.info(f"Created {len(observation_creates)} observation records")
+            return observation_creates
+
+        except Exception as e:
+            self.logger.error(f"Error ingesting observations by configuration: {e}")
+            raise
+
+    async def ingest_observations_from_active_configuration(
+        self,
+        survey_id: UUID,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[ObservationCreate]:
+        """Ingest observations using the active survey configuration.
+
+        Args:
+            survey_id: Survey ID to associate observations with
+            start_time: Override start time (optional)
+            end_time: Override end time (optional)
+
+        Returns:
+            List of ObservationCreate objects ready for database storage
+
+        USE CASE: Automated ingestion using system configuration
+        """
+        try:
+            if not self.survey_config_service:
+                raise ValueError("Survey configuration service not available")
+
+            # Get the active configuration
+            config = await self.survey_config_service.get_configuration_for_ingestion()
+            if not config:
+                self.logger.warning("No active survey configuration found")
+                return []
+
+            return await self.ingest_observations_by_configuration(
+                config=config,
+                survey_id=survey_id,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        except Exception as e:
+            self.logger.error(
+                f"Error ingesting observations from active configuration: {e}"
             )
             raise
 
@@ -330,10 +461,27 @@ class DataIngestionService:
         Returns:
             ObservationCreate object
         """
-        # Parse observation time
+        # Parse observation time - handle both MJD and ISO formats
         obs_time_str = mast_obs.get("obs_date")
         if obs_time_str:
-            obs_time = datetime.fromisoformat(obs_time_str.replace("Z", "+00:00"))
+            try:
+                # Try parsing as MJD (Modified Julian Date) first
+                if obs_time_str.replace(".", "").isdigit():
+                    # Convert MJD to datetime using astropy
+                    from astropy.time import Time
+
+                    mjd_time = Time(float(obs_time_str), format="mjd")
+                    obs_time = mjd_time.to_datetime(timezone=UTC)
+                else:
+                    # Try parsing as ISO format
+                    obs_time = datetime.fromisoformat(
+                        obs_time_str.replace("Z", "+00:00")
+                    )
+            except (ValueError, TypeError) as e:
+                self.logger.warning(
+                    f"Failed to parse observation time '{obs_time_str}': {e}"
+                )
+                obs_time = datetime.now(UTC)
         else:
             obs_time = datetime.now(UTC)
 

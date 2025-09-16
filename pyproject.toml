@@ -10,7 +10,7 @@ name = "astrid"
 version = "0.1.0"
 description = "Astronomical Identification: Temporal Dataset Preparation and Anomaly Detection"
 authors = [
-    {name = "Chris Lawrence", email = "chris.lawrence@viu.ca"}
+    {name = "Chris Lawrence", email = "chrislawrencedev@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"
@@ -59,6 +59,8 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "tensorflow==2.20.0",
     "keras==3.11.3",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
 
     # Authentication
     "supabase>=2.0.0",
@@ -79,6 +81,7 @@ dependencies = [
     "websockets==14.2.0",
     "bleach",
     "sentry-sdk[fastapi]",
+    "reproject>=0.12.0",
 ]
 
 [project.optional-dependencies]

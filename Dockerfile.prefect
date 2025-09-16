@@ -21,9 +21,13 @@ COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+COPY scripts/ ./scripts/
 
 # Install Python dependencies (editable install requires src present)
 RUN pip install uv && uv pip install --system --no-cache -e .
+
+# Install requests for the wait script
+RUN pip install requests
 
 # Create logs directory
 RUN mkdir -p /app/logs
@@ -32,5 +36,5 @@ RUN mkdir -p /app/logs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1
 
-# Default command for Prefect worker
-CMD ["python", "-m", "prefect", "worker", "start", "--pool", "astrid-pool"]
+# Default command for Prefect worker with retry mechanism
+CMD ["/app/scripts/start_prefect_worker.sh"]
