@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Any
+from uuid import UUID
 
 from prefect import flow, task
 
@@ -22,38 +23,78 @@ async def ingest_window() -> list[str]:
 
     try:
         # Use the data ingestion service to discover new observations
+        from src.core.db.session import get_db
+        from src.domains.observations.crud import SurveyCRUD
         from src.domains.observations.ingestion.services.data_ingestion import (
             DataIngestionService,
         )
-
-        ingestion_service = DataIngestionService()
-
-        # For now, use a simplified mock implementation
-        # In production, this would integrate with actual survey queries
-        # TODO: Implement actual survey queries
-        from uuid import uuid4
-
-        # Mock survey ID - in production this would be from database
-        mock_survey_id = uuid4()
-
-        # Example: Query for new observations in M31 field
-        # In production, this would be configured via parameters
-        # TODO: Implement actual survey queries
-        observations = await ingestion_service.ingest_observations_by_position(
-            ra=10.6847,  # M31 coordinates
-            dec=41.2691,
-            survey_id=mock_survey_id,
-            radius=1.0,  # 1 degree radius
-            missions=["HST"],
+        from src.domains.observations.survey_config_service import (
+            SurveyConfigurationService,
         )
 
-        # For now, return observation IDs based on their observation_id field
-        # In a real implementation, these would be saved to database first
-        # TODO: Implement actual database saving
-        observation_ids = [obs.observation_id for obs in observations]
-        logger.info(f"Discovered {len(observation_ids)} new observations")
+        # Get database session
+        async for db in get_db():
+            # Initialize services
+            survey_config_service = SurveyConfigurationService(db)
+            ingestion_service = DataIngestionService(
+                survey_config_service=survey_config_service
+            )
 
-        return observation_ids
+            # Initialize default configurations if needed
+            await survey_config_service.initialize_default_configurations()
+
+            # Get or create a default survey
+            survey_crud = SurveyCRUD()
+            from src.domains.observations.schema import SurveyListParams
+
+            survey_params = SurveyListParams(limit=1)
+            surveys, _ = await survey_crud.get_many(db, survey_params)
+            if not surveys:
+                # Create a default survey
+                from src.domains.observations.schema import SurveyCreate
+
+                survey_data = SurveyCreate(
+                    name="AstrID Default Survey",
+                    description="Default survey for automated observation ingestion",
+                    is_active=True,
+                )
+                survey = await survey_crud.create(db, survey_data)
+                survey_id = survey.id
+            else:
+                survey_id = surveys[0].id
+
+            # Use configuration-driven ingestion
+            observations = (
+                await ingestion_service.ingest_observations_from_active_configuration(
+                    survey_id=UUID(str(survey_id)),
+                )
+            )
+
+            if not observations:
+                logger.info("No new observations found")
+                return []
+
+            # Save observations to database
+            from src.domains.observations.ingestion.services.observation_builder import (
+                ObservationBuilderService,
+            )
+
+            observation_builder = ObservationBuilderService()
+            created_observations = (
+                await observation_builder.create_observations_from_ingestion(
+                    db, observations
+                )
+            )
+
+            # Return observation IDs for processing
+            observation_ids = [str(obs.id) for obs in created_observations]
+            logger.info(f"Discovered and saved {len(observation_ids)} new observations")
+
+            await db.commit()
+            return observation_ids
+
+        # If no database session was available, return empty list
+        return []
 
     except Exception as e:
         logger.error(f"Error during observation ingestion: {e}")

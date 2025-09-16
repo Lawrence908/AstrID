@@ -1,12 +1,19 @@
 """Service layer for observations domain."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import configure_domain_logger
 from src.domains.observations.crud import ObservationCRUD, SurveyCRUD
+from src.domains.observations.events import (
+    ObservationFailed,
+    ObservationStatusChanged,
+)
 from src.domains.observations.ingestion.services import (
     DataIngestionService,
     ObservationBuilderService,
@@ -21,6 +28,10 @@ from src.domains.observations.schema import (
     SurveyListParams,
     SurveyRead,
     SurveyUpdate,
+)
+from src.domains.observations.validators import (
+    ObservationValidationError,
+    ObservationValidator,
 )
 
 
@@ -479,7 +490,7 @@ class ObservationService:
         size: float = 0.25,
         pixels: int = 512,
         surveys: list[str] | None = None,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Create a complete reference dataset with image, catalog, and mask.
 
         Args:
@@ -608,4 +619,328 @@ class ObservationService:
 
         except Exception as e:
             self.logger.error(f"Failed to ingest from directory: {e}")
+            raise
+
+    # Additional business logic methods
+
+    async def validate_observation_data(self, data: ObservationCreate) -> bool:
+        """Validate observation data using business rules.
+
+        Args:
+            data: Observation data to validate
+
+        Returns:
+            bool: True if validation passes
+
+        Raises:
+            ObservationValidationError: If validation fails
+        """
+        self.logger.debug(f"Validating observation data for {data.observation_id}")
+
+        try:
+            validator = ObservationValidator()
+
+            # Convert to dict for validation
+            data_dict = data.model_dump()
+            validator.validate_observation_data(data_dict)
+
+            self.logger.debug(
+                f"Observation data validation passed for {data.observation_id}"
+            )
+            return True
+
+        except ObservationValidationError as e:
+            self.logger.error(
+                f"Observation validation failed for {data.observation_id}: {e}"
+            )
+            raise
+
+    async def calculate_observation_metrics(self, observation: ObservationRead) -> dict:
+        """Calculate metrics and derived values for an observation.
+
+        Args:
+            observation: Observation to calculate metrics for
+
+        Returns:
+            dict: Calculated metrics
+        """
+        self.logger.debug(f"Calculating metrics for observation {observation.id}")
+
+        try:
+            # Get the full observation model for business logic methods
+            obs_model = await self.crud.get_by_id(self.db, observation.id)
+            if not obs_model:
+                raise ValueError(f"Observation {observation.id} not found")
+
+            metrics = {
+                "observation_id": str(observation.id),
+                "survey_id": str(observation.survey_id),
+                "coordinates": {
+                    "ra": observation.ra,
+                    "dec": observation.dec,
+                    "validation": obs_model.validate_coordinates(),
+                },
+                "calculated_airmass": obs_model.calculate_airmass(),
+                "processing_status": obs_model.get_processing_status(),
+                "sky_region": obs_model.get_sky_region_bounds(),
+                "quality_metrics": {
+                    "has_airmass": observation.airmass is not None,
+                    "has_seeing": observation.seeing is not None,
+                    "has_pixel_scale": observation.pixel_scale is not None,
+                    "exposure_time_seconds": observation.exposure_time,
+                    "filter_band": observation.filter_band,
+                },
+                "file_status": {
+                    "has_fits_file": bool(observation.fits_file_path),
+                    "has_thumbnail": bool(observation.thumbnail_path),
+                    "fits_url": observation.fits_url,
+                },
+            }
+
+            self.logger.debug(f"Calculated metrics for observation {observation.id}")
+            return metrics
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to calculate metrics for observation {observation.id}: {e}"
+            )
+            raise
+
+    async def process_observation_status_change(
+        self,
+        observation_id: UUID,
+        new_status: ObservationStatus,
+        reason: str | None = None,
+        changed_by: str | None = None,
+    ) -> ObservationRead | None:
+        """Process a status change with proper event handling and validation.
+
+        Args:
+            observation_id: Observation UUID
+            new_status: New status to set
+            reason: Reason for the status change
+            changed_by: Who/what triggered the change
+
+        Returns:
+            ObservationRead: Updated observation or None if not found
+        """
+        self.logger.info(
+            f"Processing status change for {observation_id} to {new_status.value}"
+        )
+
+        try:
+            async with self.db.begin():  # Transaction management
+                # Get current observation
+                current_obs = await self.get_observation_by_id(observation_id)
+                if not current_obs:
+                    self.logger.warning(
+                        f"Observation {observation_id} not found for status change"
+                    )
+                    return None
+
+                old_status = current_obs.status
+
+                # Validate status transition
+                if not self._is_valid_status_transition(old_status, new_status):
+                    raise ValueError(
+                        f"Invalid status transition from {old_status} to {new_status}"
+                    )
+
+                # Update status
+                updated_obs = await self.update_observation_status(
+                    observation_id, new_status
+                )
+                if not updated_obs:
+                    return None
+
+                # Create status change event
+                status_event = ObservationStatusChanged(
+                    observation_id=observation_id,
+                    survey_id=current_obs.survey_id,
+                    old_status=old_status,
+                    new_status=new_status,
+                    changed_at=datetime.now(),
+                    changed_by=changed_by,
+                    reason=reason,
+                )
+
+                # Log event (in real implementation, this would be published to event bus)
+                self.logger.info(f"Status change event: {status_event}")
+
+                return updated_obs
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to process status change for {observation_id}: {e}"
+            )
+            raise
+
+    async def handle_observation_failure(
+        self,
+        observation_id: UUID,
+        failed_stage: str,
+        error_message: str,
+        error_details: dict | None = None,
+        is_retryable: bool = True,
+    ) -> None:
+        """Handle observation processing failure with proper error tracking.
+
+        Args:
+            observation_id: Observation UUID
+            failed_stage: Processing stage that failed
+            error_message: Error description
+            error_details: Additional error details
+            is_retryable: Whether the failure can be retried
+        """
+        self.logger.error(
+            f"Handling failure for observation {observation_id} at stage {failed_stage}"
+        )
+
+        try:
+            async with self.db.begin():  # Transaction management
+                # Get current observation
+                current_obs = await self.get_observation_by_id(observation_id)
+                if not current_obs:
+                    self.logger.warning(
+                        f"Observation {observation_id} not found for failure handling"
+                    )
+                    return
+
+                # Update status to failed
+                await self.update_observation_status(
+                    observation_id, ObservationStatus.FAILED
+                )
+
+                # Create failure event
+                failure_event = ObservationFailed(
+                    observation_id=observation_id,
+                    survey_id=current_obs.survey_id,
+                    failed_stage=failed_stage,
+                    error_message=error_message,
+                    error_details=error_details,
+                    failed_at=datetime.now(),
+                    previous_status=current_obs.status,
+                    is_retryable=is_retryable,
+                )
+
+                # Log event (in real implementation, this would be published to event bus)
+                self.logger.error(f"Failure event: {failure_event}")
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to handle observation failure for {observation_id}: {e}"
+            )
+            raise
+
+    def _is_valid_status_transition(
+        self, old_status: ObservationStatus, new_status: ObservationStatus
+    ) -> bool:
+        """Validate if a status transition is allowed.
+
+        Args:
+            old_status: Current status
+            new_status: Desired new status
+
+        Returns:
+            bool: True if transition is valid
+        """
+        # Define valid state transitions
+        valid_transitions = {
+            ObservationStatus.INGESTED: [
+                ObservationStatus.PREPROCESSING,
+                ObservationStatus.FAILED,
+                ObservationStatus.ARCHIVED,
+            ],
+            ObservationStatus.PREPROCESSING: [
+                ObservationStatus.PREPROCESSED,
+                ObservationStatus.FAILED,
+            ],
+            ObservationStatus.PREPROCESSED: [
+                ObservationStatus.DIFFERENCING,
+                ObservationStatus.FAILED,
+                ObservationStatus.ARCHIVED,
+            ],
+            ObservationStatus.DIFFERENCING: [
+                ObservationStatus.DIFFERENCED,
+                ObservationStatus.FAILED,
+            ],
+            ObservationStatus.DIFFERENCED: [
+                ObservationStatus.ARCHIVED,
+                ObservationStatus.FAILED,
+            ],
+            ObservationStatus.FAILED: [
+                ObservationStatus.INGESTED,  # For retry
+                ObservationStatus.ARCHIVED,
+            ],
+            ObservationStatus.ARCHIVED: [],  # Terminal state
+        }
+
+        allowed_transitions = valid_transitions.get(old_status, [])
+        return new_status in allowed_transitions
+
+    async def get_survey_observation_summary(self, survey_id: UUID) -> dict[str, Any]:
+        """Get comprehensive summary of observations for a survey.
+
+        Args:
+            survey_id: Survey UUID
+
+        Returns:
+            dict: Survey observation summary
+        """
+        self.logger.debug(f"Getting observation summary for survey {survey_id}")
+
+        try:
+            # Get survey info
+            survey = await SurveyCRUD().get_by_id(self.db, survey_id)
+            if not survey:
+                raise ValueError(f"Survey {survey_id} not found")
+
+            # Get observation counts by status
+            status_counts = {}
+            for status in ObservationStatus:
+                params = ObservationListParams(
+                    survey_id=survey_id, status=status, limit=1
+                )
+                _, count = await self.crud.get_many(self.db, params)
+                status_counts[status.value] = count
+
+            # Get recent observations
+            recent_params = ObservationListParams(survey_id=survey_id, limit=10)
+            recent_obs, _ = await self.crud.get_many(self.db, recent_params)
+
+            summary = {
+                "survey": {
+                    "id": str(survey.id),
+                    "name": survey.name,
+                    "description": survey.description,
+                    "is_active": survey.is_active,
+                },
+                "observation_counts": {
+                    "total": sum(status_counts.values()),
+                    "by_status": status_counts,
+                },
+                "recent_observations": len(recent_obs),
+                "processing_summary": {
+                    "ready_for_processing": status_counts.get(
+                        ObservationStatus.INGESTED.value, 0
+                    ),
+                    "in_progress": (
+                        status_counts.get(ObservationStatus.PREPROCESSING.value, 0)
+                        + status_counts.get(ObservationStatus.DIFFERENCING.value, 0)
+                    ),
+                    "completed": status_counts.get(
+                        ObservationStatus.DIFFERENCED.value, 0
+                    ),
+                    "failed": status_counts.get(ObservationStatus.FAILED.value, 0),
+                    "archived": status_counts.get(ObservationStatus.ARCHIVED.value, 0),
+                },
+            }
+
+            self.logger.debug(f"Generated observation summary for survey {survey_id}")
+            return summary
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to get survey observation summary for {survey_id}: {e}"
+            )
             raise
