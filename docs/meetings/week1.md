@@ -1,4 +1,4 @@
-# Week 1 Advisor Meeting - AstrID Project Overview
+# **AstrID Project Overview** - *Meeting 1*
 
 ## Project Summary
 **AstrID (Astronomical Identification)** is a comprehensive system for temporal dataset preparation and anomaly detection in astronomical observations. The project focuses on detecting transient events (supernovae, unusual celestial phenomena) using machine learning approaches on time-series astronomical imaging data.
