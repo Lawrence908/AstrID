@@ -84,9 +84,18 @@ class R2StorageClient:
 
         # Configure boto settings
         if Config:
+            # Configure SSL verification and optional CA bundle
+            verify = getattr(self.config, "r2_verify_ssl", True)
+            ca_bundle = getattr(self.config, "r2_ca_bundle", None)
+            # botocore Config does not accept verify directly; we pass it to client()
+            # Store values for later use
+            self._verify_ssl = verify
+            self._ca_bundle = ca_bundle
             self.boto_config = Config()
         else:
             self.boto_config = None
+            self._verify_ssl = True
+            self._ca_bundle = None
 
     def _get_session(self):
         """Get aioboto3 session with R2 configuration."""
@@ -170,8 +179,11 @@ class R2StorageClient:
             upload_metadata["sha256"] = file_hash
 
             session = self._get_session()
-            async with session.client(
-                "s3", endpoint_url=self.endpoint_url, config=self.boto_config
+            async with session.client(  # type: ignore[misc]
+                "s3",
+                endpoint_url=self.endpoint_url,
+                config=self.boto_config,
+                verify=self._ca_bundle or self._verify_ssl,
             ) as s3_client:
                 # Upload file
                 await s3_client.put_object(
@@ -204,8 +216,11 @@ class R2StorageClient:
         """
         try:
             session = self._get_session()
-            async with session.client(
-                "s3", endpoint_url=self.endpoint_url, config=self.boto_config
+            async with session.client(  # type: ignore[misc]
+                "s3",
+                endpoint_url=self.endpoint_url,
+                config=self.boto_config,
+                verify=self._ca_bundle or self._verify_ssl,
             ) as s3_client:
                 response = await s3_client.get_object(Bucket=bucket, Key=key)
                 data = await response["Body"].read()
@@ -232,8 +247,11 @@ class R2StorageClient:
         """
         try:
             session = self._get_session()
-            async with session.client(
-                "s3", endpoint_url=self.endpoint_url, config=self.boto_config
+            async with session.client(  # type: ignore[misc]
+                "s3",
+                endpoint_url=self.endpoint_url,
+                config=self.boto_config,
+                verify=self._ca_bundle or self._verify_ssl,
             ) as s3_client:
                 await s3_client.delete_object(Bucket=bucket, Key=key)
 
@@ -262,8 +280,11 @@ class R2StorageClient:
         """
         try:
             session = self._get_session()
-            async with session.client(
-                "s3", endpoint_url=self.endpoint_url, config=self.boto_config
+            async with session.client(  # type: ignore[misc]
+                "s3",
+                endpoint_url=self.endpoint_url,
+                config=self.boto_config,
+                verify=self._ca_bundle or self._verify_ssl,
             ) as s3_client:
                 response = await s3_client.list_objects_v2(
                     Bucket=bucket, Prefix=prefix, MaxKeys=max_keys
@@ -297,7 +318,7 @@ class R2StorageClient:
         """
         try:
             session = self._get_session()
-            async with session.client(
+            async with session.client(  # type: ignore[misc]
                 "s3", endpoint_url=self.endpoint_url, config=self.boto_config
             ) as s3_client:
                 response = await s3_client.head_object(Bucket=bucket, Key=key)

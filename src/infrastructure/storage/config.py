@@ -6,8 +6,10 @@ from src.core.constants import (
     CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_R2_ACCESS_KEY_ID,
     CLOUDFLARE_R2_BUCKET_NAME,
+    CLOUDFLARE_R2_CA_BUNDLE,
     CLOUDFLARE_R2_ENDPOINT_URL,
     CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    CLOUDFLARE_R2_VERIFY_SSL,
     DVC_REMOTE_URL,
     MLFLOW_ARTIFACT_ROOT,
 )
@@ -35,6 +37,8 @@ class StorageConfig:
     dvc_remote_name: str = "r2"
     content_addressing_enabled: bool = True
     deduplication_enabled: bool = True
+    r2_verify_ssl: bool = True
+    r2_ca_bundle: str | None = None
 
     @classmethod
     def from_env(cls) -> "StorageConfig":
@@ -47,6 +51,8 @@ class StorageConfig:
             r2_endpoint_url=CLOUDFLARE_R2_ENDPOINT_URL or "",
             dvc_remote_url=DVC_REMOTE_URL or "s3://astrid-data",
             mlflow_artifact_root=MLFLOW_ARTIFACT_ROOT or "s3://astrid-models",
+            r2_verify_ssl=CLOUDFLARE_R2_VERIFY_SSL,
+            r2_ca_bundle=CLOUDFLARE_R2_CA_BUNDLE,
         )
 
     def validate(self) -> None:

@@ -13,10 +13,11 @@ class DetectionRepository:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = DetectionCRUD()
 
     async def create(self, detection_data: DetectionCreate) -> Any:
         """Create a new detection."""
-        return await DetectionCRUD.create(self.db, detection_data)  # type: ignore[call-arg]
+        return await self.crud.create(self.db, detection_data)  # type: ignore[call-arg]
 
     async def get_by_id(self, detection_id: str) -> Any:
         """Get detection by ID."""
@@ -34,11 +35,18 @@ class DetectionRepository:
         offset: int = 0,
     ) -> Any:
         """List detections with filtering."""
+        from uuid import UUID
+
+        from src.domains.detection.models import DetectionStatus
+
+        parsed_obs = UUID(observation_id) if observation_id else None
+        parsed_status = DetectionStatus(status) if status else None
+
         params = DetectionListParams(
-            observation_id=observation_id,
+            observation_id=parsed_obs,
             detection_type=None,  # TODO: Add detection_type parameter if needed
-            status=status,
-            min_confidence_score=min_score,
+            status=parsed_status,
+            min_confidence=min_score,
             limit=limit,
             offset=offset,
         )

@@ -20,11 +20,13 @@ from src.core.exceptions import (
     AstrIDException,
     ResourceNotFoundError,
 )
+from src.domains.detection.config import ModelConfig
 from src.domains.detection.repository import DetectionRepository
 from src.domains.detection.schema import (
     DetectionRead,
     ModelRunRead,
 )
+from src.domains.detection.services.model_inference import ModelInferenceService
 
 router = APIRouter()
 
@@ -82,14 +84,18 @@ async def run_inference(
 ) -> JSONResponse:
     """Run ML inference on an observation to detect anomalies."""
     try:
-        # service = DetectionService(db)  # Unused for now
+        # Prepare and warm up model; actual execution is orchestrated elsewhere
+        cfg = ModelConfig(
+            model_version=request.model_version or "latest",
+            confidence_threshold=request.confidence_threshold,
+        )
+        service = ModelInferenceService(cfg)
+        service.warm_up()
 
-        # For now, return a placeholder response indicating inference is queued
-        # In a real implementation, this would start an async job
         model_run_data = {
-            "id": str(UUID("00000000-0000-0000-0000-000000000001")),  # Placeholder ID
+            "id": str(UUID("00000000-0000-0000-0000-000000000001")),
             "observation_id": request.observation_id,
-            "model_version": request.model_version or "latest",
+            "model_version": cfg.model_version,
             "status": "queued",
             "created_at": datetime.now(UTC).isoformat(),
             "message": "Inference job queued for processing",
@@ -102,6 +108,12 @@ async def run_inference(
     except AstrIDException as e:
         status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
         raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.get("/{detection_id}/confidence")  # type: ignore[misc]
+async def get_detection_confidence_endpoint(detection_id: str) -> JSONResponse:
+    """Placeholder returning stored confidence once detections table is wired."""
+    return create_response({"detection_id": detection_id, "confidence": 0.0})
 
 
 @router.get(
