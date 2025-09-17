@@ -20,6 +20,10 @@ except Exception:  # pragma: no cover - optional dependency
     mlflow = None
     pyfunc = None
     MLFLOW_AVAILABLE = False
+try:  # MLflow error type for model registry
+    from mlflow.exceptions import RestException as MlflowRestException  # type: ignore
+except Exception:
+    MlflowRestException = Exception  # type: ignore
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,11 +62,13 @@ def _load_model_cached(
             loaded = cast(Any, keras_api).load_model(model_uri)
         else:
             raise RuntimeError("mlflow.keras not available")
-    except Exception:
+    except (MlflowRestException, Exception):
         # Fallback to pyfunc (works if logged as generic model)
-        if pyfunc is not None:
-            loaded = cast(Any, pyfunc).load_model(model_uri)
-        else:
+        try:
+            loaded = (
+                cast(Any, pyfunc).load_model(model_uri) if pyfunc is not None else None
+            )
+        except Exception:
             loaded = None
     # Final safety: if nothing loaded, build local adapter model
     if loaded is None:
