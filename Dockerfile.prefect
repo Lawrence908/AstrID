@@ -24,10 +24,11 @@ COPY alembic.ini ./
 COPY scripts/ ./scripts/
 
 # Install Python dependencies (editable install requires src present)
-RUN pip install uv && uv pip install --system --no-cache -e .
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache-dir -e .
 
 # Install requests for the wait script
-RUN pip install requests
+RUN pip install --no-cache-dir requests
 
 # Create logs directory
 RUN mkdir -p /app/logs

@@ -39,12 +39,15 @@ services:
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=auto
+      - MLFLOW_SUPABASE_SSL_CERT_PATH=/app/certs/prod-ca-2021.crt
     ports:
       - "5000:5000"
+    volumes:
+      - ./certs:/app/certs
     networks:
       - astrid-network
     command: >
-      bash -c "pip install psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 120'"
+      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 120'"
     # Using Supabase PostgreSQL
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -67,12 +70,15 @@ services:
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+      - PREFECT_SUPABASE_SSL_CERT_PATH=/app/certs/prod-ca-2021.crt
+    volumes:
+      - ./certs:/app/certs
     networks:
       - astrid-network
     command: >
       bash -c "
-        apt-get update && apt-get install -y curl &&
-        pip install 'prefect[postgres]>=2.14.0' &&
+        apt-get update && apt-get install -y curl ca-certificates &&
+        pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org 'prefect[postgres]>=2.14.0' &&
         prefect server start --host 0.0.0.0 --port 4200
       "
     healthcheck:
@@ -163,6 +169,7 @@ services:
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
       - PREFECT_WORK_POOL_NAME=astrid-pool
+      - PREFECT_EVENTS_CLIENT_DISABLE=true
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
@@ -180,6 +187,7 @@ services:
       - .:/app
       - ./src:/app/src
       - ./logs:/app/logs
+      - ./certs:/app/certs
     networks:
       - astrid-network
     depends_on:
