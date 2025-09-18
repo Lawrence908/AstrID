@@ -116,7 +116,9 @@ class TestPrefectServer:
             with patch.object(prefect_server, "_client") as mock_prefect_client:
                 mock_work_pool = Mock()
                 mock_work_pool.name = "test-pool"
-                mock_prefect_client.read_work_pool.return_value = mock_work_pool
+                mock_prefect_client.read_work_pool = AsyncMock(
+                    return_value=mock_work_pool
+                )
 
                 health = await prefect_server.health_check()
 
@@ -151,7 +153,7 @@ class TestPrefectServer:
             mock_flow_run.end_time = datetime.utcnow()
             mock_flow_run.created = datetime.utcnow()
             mock_flow_run.state.message = None
-            mock_client.read_flow_run.return_value = mock_flow_run
+            mock_client.read_flow_run = AsyncMock(return_value=mock_flow_run)
 
             status = await prefect_server.get_flow_status(flow_id)
 
@@ -165,7 +167,7 @@ class TestPrefectServer:
         flow_id = str(uuid4())
 
         with patch.object(prefect_server, "_client") as mock_client:
-            mock_client.cancel_flow_run.return_value = None
+            mock_client.cancel_flow_run = AsyncMock(return_value=None)
 
             result = await prefect_server.cancel_flow(flow_id)
 
@@ -178,7 +180,7 @@ class TestPrefectServer:
         flow_id = str(uuid4())
 
         with patch.object(prefect_server, "_client") as mock_client:
-            mock_client.retry_flow_run.return_value = None
+            mock_client.retry_flow_run = AsyncMock(return_value=None)
 
             result = await prefect_server.retry_flow(flow_id)
 
@@ -196,7 +198,7 @@ class TestPrefectServer:
             mock_log.level = "INFO"
             mock_log.message = "Test log message"
             mock_log.name = "test_task"
-            mock_client.read_logs.return_value = [mock_log]
+            mock_client.read_logs = AsyncMock(return_value=[mock_log])
 
             logs = await prefect_server.get_flow_logs(flow_id, 10)
 
@@ -247,12 +249,12 @@ class TestWorkflowMonitoring:
             mock_flow_run.end_time = datetime.utcnow()
             mock_flow_run.created = datetime.utcnow()
             mock_flow_run.state.type = "COMPLETED"
-            mock_client.read_flow_run.return_value = mock_flow_run
+            mock_client.read_flow_run = AsyncMock(return_value=mock_flow_run)
 
             mock_task_run = Mock()
             mock_task_run.state.type = "COMPLETED"
             mock_task_run.run_count = 1
-            mock_client.read_task_runs.return_value = [mock_task_run]
+            mock_client.read_task_runs = AsyncMock(return_value=[mock_task_run])
 
             metrics = await workflow_monitoring.monitor_flow_performance(flow_id)
 
@@ -298,7 +300,7 @@ class TestWorkflowMonitoring:
             mock_flow_run.state.type = "COMPLETED"
             mock_flow_run.start_time = start_time
             mock_flow_run.end_time = end_time
-            mock_client.read_flow_runs.return_value = [mock_flow_run]
+            mock_client.read_flow_runs = AsyncMock(return_value=[mock_flow_run])
 
             with patch.object(
                 workflow_monitoring, "monitor_flow_performance"
