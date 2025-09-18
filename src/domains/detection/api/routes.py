@@ -21,10 +21,14 @@ from src.core.exceptions import (
     ResourceNotFoundError,
 )
 from src.domains.detection.config import ModelConfig
+from src.domains.detection.entities import DetectionResult, Observation
 from src.domains.detection.repository import DetectionRepository
 from src.domains.detection.schema import (
     DetectionRead,
     ModelRunRead,
+)
+from src.domains.detection.services.detection_service import (
+    DetectionService as ComprehensiveDetectionService,
 )
 from src.domains.detection.services.model_inference import ModelInferenceService
 
@@ -425,4 +429,284 @@ async def batch_validate_detections(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Batch validation failed: {str(e)}"
+        ) from e
+
+
+# New ASTR-81 API endpoints
+
+
+@router.post(
+    "/process/{observation_id}",
+    response_model=ResponseEnvelope[DetectionResult],
+    responses={
+        200: {"description": "Observation processed successfully"},
+        400: {"description": "Invalid observation data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Observation not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def process_observation(
+    observation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> JSONResponse:
+    """Process an observation for anomaly detection."""
+    try:
+        service = ComprehensiveDetectionService(db)
+
+        # Create mock observation for testing
+        # In production, this would load from the database
+        observation = Observation(
+            id=UUID(observation_id),
+            survey_id=UUID("00000000-0000-0000-0000-000000000001"),
+            observation_id=observation_id,
+            ra=180.0,
+            dec=45.0,
+            observation_time=datetime.now(UTC),
+            filter_band="g",
+            exposure_time=300.0,
+            fits_url=f"http://example.com/{observation_id}.fits",
+            image_data=None,  # Would load actual image data
+        )
+
+        result = await service.process_observation(observation)
+        return create_response(result)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except AstrIDException as e:
+        status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.get(
+    "/detection/{detection_id}",
+    response_model=ResponseEnvelope[DetectionResult],
+    responses={
+        200: {"description": "Detection result retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Detection not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_detection_result(
+    detection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Get a detection result by ID."""
+    try:
+        service = ComprehensiveDetectionService(db)
+        result = await service.get_detection_result(UUID(detection_id))
+
+        if not result:
+            raise ResourceNotFoundError(
+                message=f"Detection result with ID {detection_id} not found",
+                error_code="DETECTION_RESULT_NOT_FOUND",
+                details={"detection_id": detection_id},
+            )
+
+        return create_response(result)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except AstrIDException as e:
+        status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.get(
+    "/observation/{observation_id}",
+    response_model=ResponseEnvelope[list[DetectionResult]],
+    responses={
+        200: {"description": "Detection results retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_detections_by_observation(
+    observation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Get all detection results for an observation."""
+    try:
+        service = ComprehensiveDetectionService(db)
+        results = await service.query_detections_by_observation(UUID(observation_id))
+        return create_response(results)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get detections: {str(e)}"
+        ) from e
+
+
+@router.get(
+    "/search",
+    response_model=ResponseEnvelope[list[DetectionResult]],
+    responses={
+        200: {"description": "Detection results retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def search_detections_by_confidence(
+    confidence_min: float = Query(
+        0.0, ge=0.0, le=1.0, description="Minimum confidence"
+    ),
+    confidence_max: float = Query(
+        1.0, ge=0.0, le=1.0, description="Maximum confidence"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Search detection results by confidence range."""
+    try:
+        if confidence_min > confidence_max:
+            raise HTTPException(
+                status_code=400,
+                detail="confidence_min must be less than or equal to confidence_max",
+            )
+
+        service = ComprehensiveDetectionService(db)
+        results = await service.query_detections_by_confidence(
+            confidence_min, confidence_max
+        )
+        return create_response(results)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to search detections: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/{detection_id}/validate",
+    response_model=ResponseEnvelope[dict[str, Any]],
+    responses={
+        200: {"description": "Detection validation completed successfully"},
+        400: {"description": "Invalid validation data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Detection not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def validate_detection_result(
+    detection_id: str,
+    validation_data: DetectionValidation,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> JSONResponse:
+    """Validate a detection result."""
+    try:
+        # This would typically update the detection result validation status
+        # For now, return a success response
+        result = {
+            "detection_id": detection_id,
+            "validation_status": "validated"
+            if validation_data.is_valid
+            else "rejected",
+            "human_label": validation_data.human_label,
+            "validation_confidence": validation_data.validation_confidence,
+            "validated_by": getattr(current_user, "username", "system"),
+            "validated_at": datetime.now(UTC).isoformat(),
+        }
+
+        return create_response(result)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except AstrIDException as e:
+        status_code = 404 if isinstance(e, ResourceNotFoundError) else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@router.get(
+    "/metrics/summary",
+    response_model=ResponseEnvelope[dict[str, Any]],
+    responses={
+        200: {"description": "Detection metrics retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_detection_metrics_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+) -> JSONResponse:
+    """Get comprehensive detection metrics summary."""
+    try:
+        service = ComprehensiveDetectionService(db)
+        metrics = await service.get_detection_metrics_summary()
+        return create_response(metrics)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get metrics: {str(e)}"
+        ) from e
+
+
+@router.post(
+    "/batch-process",
+    response_model=ResponseEnvelope[list[DetectionResult]],
+    responses={
+        200: {"description": "Batch processing completed successfully"},
+        400: {"description": "Invalid observation data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def batch_process_observations(
+    observation_ids: list[str],
+    db: AsyncSession = Depends(get_db),
+    current_user: UserWithRole = Depends(
+        require_permission(Permission.MANAGE_OPERATIONS)
+    ),
+) -> JSONResponse:
+    """Process multiple observations in batch."""
+    try:
+        service = ComprehensiveDetectionService(db)
+
+        # Create mock observations for testing
+        # In production, this would load from the database
+        observations = []
+        for obs_id in observation_ids:
+            observation = Observation(
+                id=UUID(obs_id),
+                survey_id=UUID("00000000-0000-0000-0000-000000000001"),
+                observation_id=obs_id,
+                ra=180.0,
+                dec=45.0,
+                observation_time=datetime.now(UTC),
+                filter_band="g",
+                exposure_time=300.0,
+                fits_url=f"http://example.com/{obs_id}.fits",
+                image_data=None,  # Would load actual image data
+            )
+            observations.append(observation)
+
+        results = await service.process_batch_observations(observations)
+        return create_response(results)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Batch processing failed: {str(e)}"
         ) from e
