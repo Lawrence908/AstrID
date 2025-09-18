@@ -54,14 +54,16 @@ try:
         ssl_context = ssl.create_default_context(cafile=cert_path)
         ssl_context.verify_mode = ssl.CERT_REQUIRED
         ssl_context.check_hostname = True
-        logger.info("SSL context created successfully")
+        logger.info("SSL context created successfully with certificate verification")
     else:
         logger.info("No SSL certificate path provided, using default SSL context")
         ssl_context = ssl.create_default_context()
+        logger.info("Using default SSL context with system certificate store")
 except Exception as e:
     logger.error(f"Failed to create SSL context: {str(e)}", exc_info=True)
     # Fallback to default SSL context
     ssl_context = ssl.create_default_context()
+    logger.warning("Using fallback SSL context due to error")
 
 # Create async engine with SSL context and connection pooling
 try:
@@ -112,15 +114,28 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that provides an async database session."""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception as e:
-            logger.error(f"Database session error: {str(e)}", exc_info=True)
+    """FastAPI dependency that provides an async database session.
+
+    Includes connection pool monitoring and proper error handling for Supabase limits.
+    """
+    session = None
+    try:
+        session = AsyncSessionLocal()
+        # Test connection before yielding
+        await session.execute(text("SELECT 1"))
+        yield session
+    except Exception as e:
+        logger.error(f"Database session error: {str(e)}", exc_info=True)
+        if session:
             await session.rollback()
-            raise
-        finally:
+        # Check if it's a connection pool exhaustion error
+        if "MaxClientsInSessionMode" in str(e) or "max clients reached" in str(e):
+            logger.warning(
+                "Supabase connection pool exhausted - consider reducing pool sizes"
+            )
+        raise
+    finally:
+        if session:
             await session.close()
 
 
@@ -213,9 +228,9 @@ async def check_pool_health() -> dict[str, Any]:
         # Get pool statistics
         pool = engine.pool
         stats = {
-            "pool_size": pool.size(),
-            "overflow": pool.overflow(),
-            "checkedout": pool.checkedout(),
+            "pool_size": getattr(pool, "size", lambda: 0)(),
+            "overflow": getattr(pool, "overflow", lambda: 0)(),
+            "checkedout": getattr(pool, "checkedout", lambda: 0)(),
         }
 
         # Test getting a connection
@@ -231,6 +246,43 @@ async def check_pool_health() -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Pool health check failed: {str(e)}")
+        # Check for Supabase-specific connection errors
+        if "MaxClientsInSessionMode" in str(e) or "max clients reached" in str(e):
+            logger.warning(
+                "Supabase connection pool exhausted - consider reducing pool sizes"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Database connection pool exhausted. Please try again later.",
+            ) from e
         raise HTTPException(
             status_code=503, detail=f"Database pool health check failed: {str(e)}"
         ) from e
+
+
+async def get_connection_pool_status() -> dict[str, Any]:
+    """Get current connection pool status for monitoring.
+
+    Returns:
+        dict: Pool status including size, checked out connections, and overflow
+    """
+    try:
+        pool = engine.pool
+        pool_size = getattr(pool, "size", lambda: 0)()
+        overflow = getattr(pool, "overflow", lambda: 0)()
+        checked_out = getattr(pool, "checkedout", lambda: 0)()
+        checked_in = getattr(pool, "checkedin", lambda: 0)()
+
+        return {
+            "pool_size": pool_size,
+            "checked_out": checked_out,
+            "overflow": overflow,
+            "checked_in": checked_in,
+            "total_connections": pool_size + overflow,
+            "status": "healthy"
+            if checked_out < (pool_size + overflow)
+            else "exhausted",
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pool status: {str(e)}")
+        return {"error": str(e), "status": "error"}

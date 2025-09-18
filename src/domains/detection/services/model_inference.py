@@ -245,7 +245,7 @@ class ModelInferenceService:
             conf = float(patch.max()) if patch.size else 0.0
 
             det = DetectionCreate(
-                observation_id=cast(Any, observation_id),
+                observation_id=cast(Any, observation_id if observation_id else None),
                 model_run_id=cast(Any, model_run_id),
                 ra=float(cand.get("ra", 0.0)),
                 dec=float(cand.get("dec", 0.0)),

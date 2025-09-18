@@ -69,18 +69,6 @@ CLOUDFLARE_R2_BUCKET_NAME = os.getenv("CLOUDFLARE_R2_BUCKET_NAME", "astrid")
 CLOUDFLARE_R2_ENDPOINT_URL = os.getenv("CLOUDFLARE_R2_ENDPOINT_URL")
 CLOUDFLARE_EU_R2_ENDPOINT_URL = os.getenv("CLOUDFLARE_EU_R2_ENDPOINT_URL")
 
-# MLflow Configuration
-MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models")
-MLFLOW_S3_ENDPOINT_URL = os.getenv("CLOUDFLARE_R2_ENDPOINT_URL")
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
-MLFLOW_TRACING_ENABLED = os.getenv("MLFLOW_TRACING_ENABLED", "false")
-MLFLOW_S3_IGNORE_TLS = os.getenv("MLFLOW_S3_IGNORE_TLS")
-AWS_ACCESS_KEY_ID = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
-AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "auto")
-REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
-MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "inference")
-
 # MLflow Supabase Configuration
 MLFLOW_SUPABASE_URL = os.getenv("MLFLOW_SUPABASE_URL")
 MLFLOW_SUPABASE_PROJECT_REF = os.getenv("MLFLOW_SUPABASE_PROJECT_REF")
@@ -100,6 +88,19 @@ PREFECT_SUPABASE_SSL_CERT_PATH = os.getenv("PREFECT_SUPABASE_SSL_CERT_PATH")
 PREFECT_SUPABASE_KEY = os.getenv("PREFECT_SUPABASE_KEY")
 PREFECT_SUPABASE_SERVICE_ROLE_KEY = os.getenv("PREFECT_SUPABASE_SERVICE_ROLE_KEY")
 PREFECT_SUPABASE_JWT_SECRET = os.getenv("PREFECT_SUPABASE_JWT_SECRET")
+
+
+# MLflow Configuration
+MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models")
+MLFLOW_S3_ENDPOINT_URL = os.getenv("CLOUDFLARE_R2_ENDPOINT_URL")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+MLFLOW_TRACING_ENABLED = os.getenv("MLFLOW_TRACING_ENABLED", "false")
+MLFLOW_S3_IGNORE_TLS = os.getenv("MLFLOW_S3_IGNORE_TLS")
+AWS_ACCESS_KEY_ID = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "auto")
+REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
+MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "inference")
 
 # R2 SSL options (optional)
 CLOUDFLARE_R2_VERIFY_SSL = os.getenv("CLOUDFLARE_R2_VERIFY_SSL")
@@ -121,14 +122,17 @@ TWITTER_APP_ID = os.getenv("TWITTER_APP_ID")
 TWITTER_APP_SECRET = os.getenv("TWITTER_APP_SECRET")
 
 # Database Pool Configuration
+# Supabase has strict connection limits in Session mode
+# Each service (API, MLflow, Prefect) creates its own pool
+# Total connections = (pool_size + max_overflow) * number_of_services
 POOL_CONFIGS = {
     "development": {
-        "pool_size": 5,
-        "max_overflow": 10,
+        "pool_size": 2,  # Reduced from 5 to 2
+        "max_overflow": 1,  # Reduced from 10 to 1
     },
     "production": {
-        "pool_size": 3,
-        "max_overflow": 2,
+        "pool_size": 1,  # Reduced from 3 to 1
+        "max_overflow": 1,  # Keep at 1
     },
 }
 
@@ -146,8 +150,8 @@ DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds
@@ -167,8 +171,8 @@ MLFLOW_DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds
@@ -188,8 +192,8 @@ PREFECT_DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds
