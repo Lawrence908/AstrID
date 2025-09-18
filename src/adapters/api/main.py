@@ -29,6 +29,7 @@ from src.domains.detection.api.routes import router as detections_router
 from src.domains.differencing.api.routes import router as differencing_router
 from src.domains.observations.api.routes import router as observations_router
 from src.domains.preprocessing.api.routes import router as preprocessing_router
+from src.infrastructure.workflow.api import router as workflow_router
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -188,6 +189,7 @@ app.include_router(catalog_router, prefix="/catalog", tags=["catalog"])
 app.include_router(
     preprocessing_router, prefix="/preprocessing", tags=["preprocessing"]
 )
+app.include_router(workflow_router, tags=["workflows"])
 app.include_router(stream.router, prefix="/stream", tags=["stream"])
 app.include_router(storage.router, prefix="/storage", tags=["storage"])
 app.include_router(mlflow.router, tags=["mlflow"])
