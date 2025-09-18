@@ -680,7 +680,7 @@
   - [ ] Add help and support documentation
   - [ ] Create video tutorials
 
-#### ASTR-101: GPU Energy Tracking for ML Workloads ✅ **COMPLETED**
+#### ASTR-101: GPU Energy Tracking for ML Workloads
 - **Project**: ASTRID-WORK
 - **Priority**: P3 (Medium)
 - **Labels**: `mlops`, `monitoring`, `improvement`
@@ -693,6 +693,34 @@
   - [x] ✅ Add MLflow integration for energy metrics
   - [x] ✅ Create energy consumption reporting
   - [x] ✅ Add carbon footprint tracking
+  - [ ] Ensure metrics are being recorded on model runs
+
+#### ASTR-102: Refine Model Performance Tracking
+- **Project**: ASTRID-ML
+- **Priority**: P3 (Medium)
+- **Labels**: `ml`, `monitoring`, `metrics`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-88, ASTR-81
+- **Description**: Iterate through a full `ModelRun` session and ensure all desired performance metrics in database fields are populated per run; enrich MLflow logging and API responses.
+- **Subtasks**:
+  - [ ] Audit current `Model` and `ModelRun` metric fields
+  - [ ] Add missing calculations (precision/recall/F1/AUC/latency/throughput)
+  - [ ] Ensure metrics recorded during pipeline and persisted to DB
+  - [ ] Align MLflow metrics/tags with DB schema
+  - [ ] Update API responses to include full metrics set
+
+#### ASTR-103: Supabase Connection Pooling Hardening
+- **Project**: ASTRID-INFRA
+- **Priority**: P2 (High)
+- **Labels**: `infrastructure`, `database`, `stability`
+- **Estimated Time**: 1 day
+- **Dependencies**: ASTR-88, ASTR-91
+- **Description**: Minimize per-service connection pools, align MLflow/Prefect DB URLs with `pool_size=1&max_overflow=0` and timeouts, and validate optional Transaction pooling compatibility.
+- **Subtasks**:
+  - [ ] Update MLflow backend-store URI with pool params
+  - [ ] Update Prefect DB URL with pool params
+  - [ ] Document Transaction pooling compatibility
+  - [ ] Add verification steps and health checks
 
 
 ---
