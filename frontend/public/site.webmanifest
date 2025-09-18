@@ -1,0 +1,21 @@
+{
+  "name": "AstrID - Astronomical Identification System",
+  "short_name": "AstrID",
+  "description": "Astronomical Identification: Temporal Dataset Preparation and Anomaly Detection",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#3b82f6",
+  "background_color": "#1f2937",
+  "display": "standalone",
+  "start_url": "/"
+}
