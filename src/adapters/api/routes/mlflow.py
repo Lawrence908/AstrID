@@ -22,8 +22,8 @@ from src.infrastructure.mlflow import (
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/mlflow", tags=["mlflow"])
+# Create router (prefix applied in main.py for consistency)
+router = APIRouter(tags=["mlflow"])
 
 # Global instances (would be injected via dependency injection in production)
 _mlflow_config: MLflowConfig | None = None

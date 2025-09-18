@@ -127,12 +127,12 @@ TWITTER_APP_SECRET = os.getenv("TWITTER_APP_SECRET")
 # Total connections = (pool_size + max_overflow) * number_of_services
 POOL_CONFIGS = {
     "development": {
-        "pool_size": 2,  # Reduced from 5 to 2
-        "max_overflow": 1,  # Reduced from 10 to 1
+        "pool_size": 1,  # Further reduced to 1 per service
+        "max_overflow": 0,  # No overflow to prevent exceeding limits
     },
     "production": {
-        "pool_size": 1,  # Reduced from 3 to 1
-        "max_overflow": 1,  # Keep at 1
+        "pool_size": 1,  # Keep at 1
+        "max_overflow": 0,  # No overflow in production
     },
 }
 

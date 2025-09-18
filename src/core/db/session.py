@@ -120,6 +120,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     session = None
     try:
+        # Log pool status before creating session
+        logger.debug("Creating database session")
+
         session = AsyncSessionLocal()
         # Test connection before yielding
         await session.execute(text("SELECT 1"))
@@ -133,10 +136,28 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             logger.warning(
                 "Supabase connection pool exhausted - consider reducing pool sizes"
             )
+            # Log current pool status for debugging
+            logger.warning("Connection pool may be exhausted - check Supabase limits")
         raise
     finally:
         if session:
             await session.close()
+
+
+async def get_pool_health() -> dict[str, Any]:
+    """Get connection pool health status for monitoring."""
+    try:
+        # Test connection to verify pool health
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            return {"status": "healthy", "message": "Database connection successful"}
+    except Exception as e:
+        logger.error(f"Failed to get pool health: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "message": "Database connection failed",
+        }
 
 
 async def get_test_db() -> AsyncGenerator[AsyncSession, None]:

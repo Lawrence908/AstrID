@@ -47,7 +47,7 @@ services:
     networks:
       - astrid-network
     command: >
-      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 120'"
+      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
     # Using Supabase PostgreSQL
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -155,7 +155,7 @@ services:
         condition: service_healthy
       mlflow:
         condition: service_healthy
-    command: ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]
+    command: ["dramatiq", "-p", "1", "-t", "1", "src.adapters.workers.tasks"]
 
   # Prefect Worker
   prefect-worker:
