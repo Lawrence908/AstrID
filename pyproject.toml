@@ -94,6 +94,7 @@ dev = [
     "pytest-asyncio==0.26.0",
     "pytest-cov==6.1.1",
     "pytest-mock==3.14.0",
+    "pytest-xdist==3.5.0",
     "factory-boy==3.3.3",
     "moto==5.1.4",
     "coverage==7.8.0",
@@ -102,6 +103,8 @@ dev = [
     "ipykernel==6.30.1",
     "ipython==9.5.0",
     "mkdocs==1.5.3",
+    "responses==0.25.0",
+    "aioresponses==0.7.6",
 ]
 
 [tool.setuptools]
@@ -175,10 +178,15 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
+    "--cov-fail-under=90",
 ]
+asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "e2e: End-to-end tests",
+    "performance: Performance tests",
     "slow: Slow running tests",
+    "requires_gpu: Tests requiring GPU",
+    "requires_external: Tests requiring external services",
 ]

@@ -47,7 +47,15 @@ repos:
       - id: check-docstring-first
       - id: debug-statements
       - id: name-tests-test
-        args: [--pytest-test-first]
+        args:
+          - --pytest-test-first
+        exclude: |
+          (?x)^(
+            tests/fixtures/.*|
+            tests/mocks/.*|
+            tests/scripts/.*|
+            tests/utils.py
+          )$
 
       # Security
       - id: detect-private-key
