@@ -463,6 +463,22 @@
   - [ ] Add real-time streaming updates
   - [ ] Create user management interface
 
+#### ASTR-105: Testing & Diagnostics Page
+- **Project**: ASTRID-API
+- **Priority**: P3 (Medium)
+- **Labels**: `ui`, `frontend`, `testing`, `ops`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-84, ASTR-93
+- **Description**: Add a frontend page to run smoke checks and surface system health for troubleshooting. Hooks into API health, workers, queues, MLflow, storage, and database checks.
+- **Subtasks**:
+  - [ ] Create `/dashboard/testing` page with sections and results panel
+  - [ ] Wire to API health endpoints (API, DB, storage, MLflow, Prefect)
+  - [ ] Wire to workers/queues status endpoints and quick actions (read-only)
+  - [ ] Add run-all tests button, per-test execution, and live logs
+  - [ ] Add degraded state banner and error summaries
+  - [ ] Persist last-run results (localStorage) and export JSON
+  - [ ] Add route link from dashboard and Workers page
+
 ## Epic: Machine Learning & Model Management
 
 ### ML Infrastructure
