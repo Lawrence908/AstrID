@@ -554,6 +554,22 @@
   - [ ] Create differencing workers
   - [ ] Implement detection workers
 
+#### ASTR-104: Workers Operations Page & Dashboard Integration
+- **Project**: ASTRID-API
+- **Priority**: P3 (Medium)
+- **Labels**: `ui`, `frontend`, `workflow`, `ops`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-92, ASTR-84
+- **Description**: Create a dedicated Workers page for operations and monitoring, and integrate a lightweight Workers card on the main dashboard that links to it.
+- **Subtasks**:
+  - [ ] Add Start/Stop/Scale quick actions per worker type (uses `/workers/{worker_type}/start|stop|scale`)
+  - [ ] Add Clear Queue action per queue (uses `/workers/queues/{queue_name}/clear`)
+  - [ ] Dedicated page at `/dashboard/workers` listing workers and queues with actions
+  - [ ] Expand Workers card (dashboard) to show summary stats and link to page
+  - [ ] Add mini trend charts for processed tasks and failure rate (1h/6h/24h)
+  - [ ] Add polling controls (interval selector, pause/resume) and degraded state banner
+  - [ ] Toast notifications and error handling for operations
+
 ## Epic: Testing & Quality Assurance
 
 ### Testing Infrastructure
