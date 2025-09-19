@@ -13,7 +13,7 @@ A Next.js frontend for displaying AstrID system diagrams, documentation, and pla
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20 
 - npm or yarn
 
 ### Installation

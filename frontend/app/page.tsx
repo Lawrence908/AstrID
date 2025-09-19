@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/AuthProvider'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import {
   Eye,
   Search,
@@ -16,7 +17,10 @@ import {
   BookOpen,
   Star,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Server,
+  Gauge,
+  Cpu
 } from 'lucide-react'
 
 const mainSections = [
@@ -102,6 +106,64 @@ const planningSections = [
 
 export default function Home() {
   const { session } = useAuth()
+  const [workersHealth, setWorkersHealth] = useState<any | null>(null)
+  const [workersMetrics, setWorkersMetrics] = useState<any | null>(null)
+  const [queueStatus, setQueueStatus] = useState<any[] | null>(null)
+  const [workersLoading, setWorkersLoading] = useState<boolean>(true)
+  const [workersError, setWorkersError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
+    let isMounted = true
+
+    const withTimeout = async (url: string, ms: number) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), ms)
+      try {
+        const res = await fetch(url, { signal: controller.signal })
+        return res.ok ? await res.json().catch(() => null) : null
+      } catch {
+        return null
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+
+    const fetchWorkers = async () => {
+      try {
+        setWorkersError(null)
+        setWorkersLoading(true)
+
+        const results = await Promise.allSettled([
+          withTimeout(`${baseUrl}/workers/health`, 3000),
+          withTimeout(`${baseUrl}/workers/metrics?time_window_hours=24`, 3000),
+          withTimeout(`${baseUrl}/workers/queues`, 3000)
+        ])
+
+        if (!isMounted) return
+
+        const health = results[0].status === 'fulfilled' ? results[0].value : null
+        const metrics = results[1].status === 'fulfilled' ? results[1].value : null
+        const queues = results[2].status === 'fulfilled' ? results[2].value : null
+
+        setWorkersHealth(health)
+        setWorkersMetrics(metrics)
+        setQueueStatus(Array.isArray(queues) ? queues : queues?.queues || null)
+        setWorkersLoading(false)
+      } catch (e: any) {
+        if (!isMounted) return
+        setWorkersError('Unable to reach workers API')
+        setWorkersLoading(false)
+      }
+    }
+
+    fetchWorkers()
+    const id = setInterval(fetchWorkers, 10000)
+    return () => {
+      isMounted = false
+      clearInterval(id)
+    }
+  }, [])
 
   if (!session) {
     return (
@@ -279,6 +341,121 @@ export default function Home() {
             <p className="text-2xl font-bold text-white mt-2">0</p>
             <p className="text-xs text-gray-500">System alerts</p>
             <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+          </div>
+        </div>
+
+        {/* Workers Status Card */}
+        <div className="mt-8">
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <Server className="w-5 h-5 text-astrid-blue" />
+                <h2 className="text-xl font-bold text-white">Workers</h2>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  workersHealth?.status === 'healthy'
+                    ? 'bg-green-900 text-green-300'
+                    : workersHealth?.status === 'degraded'
+                    ? 'bg-yellow-900 text-yellow-300'
+                    : 'bg-gray-700 text-gray-300'
+                }`}>
+                  {workersLoading ? 'Checking…' : workersHealth?.status ?? 'Unknown'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Link
+                  href="/dashboard/workflows"
+                  className="text-sm px-3 py-1.5 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
+                >
+                  View Workflows
+                </Link>
+              </div>
+            </div>
+
+            {workersError && (
+              <div className="flex items-center space-x-2 text-red-400 text-sm mb-4">
+                <AlertTriangle className="w-4 h-4" />
+                <span>{workersError}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-4 h-4 text-green-400" />
+                  <span className="text-sm text-gray-300">Active Workers</span>
+                </div>
+                <p className="text-2xl font-bold text-white mt-2">
+                  {workersLoading ? '—' : workersHealth?.active_workers ?? workersHealth?.total_workers ?? 0}
+                </p>
+                <p className="text-xs text-gray-500">Healthy: {workersLoading ? '—' : workersHealth?.healthy_workers ?? 0}</p>
+              </div>
+
+              <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Gauge className="w-4 h-4 text-astrid-blue" />
+                  <span className="text-sm text-gray-300">Throughput (24h)</span>
+                </div>
+                <p className="text-2xl font-bold text-white mt-2">
+                  {workersLoading ? '—' : workersMetrics?.total_tasks_processed ?? 0}
+                </p>
+                <p className="text-xs text-gray-500">Failed: {workersLoading ? '—' : workersMetrics?.total_tasks_failed ?? 0}</p>
+              </div>
+
+              <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm text-gray-300">Avg Proc Time</span>
+                </div>
+                <p className="text-2xl font-bold text-white mt-2">
+                  {workersLoading ? '—' : (workersMetrics?.average_processing_time?.toFixed?.(2) ?? '0.00')}s
+                </p>
+                <p className="text-xs text-gray-500">Failure Rate: {workersLoading ? '—' : ((workersMetrics?.failure_rate ?? 0) * 100).toFixed(2)}%</p>
+              </div>
+
+              <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Database className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm text-gray-300">Queues</span>
+                </div>
+                <p className="text-2xl font-bold text-white mt-2">
+                  {workersLoading ? '—' : (queueStatus?.length ?? 0)}
+                </p>
+                <p className="text-xs text-gray-500">Showing enabled queues</p>
+              </div>
+            </div>
+
+            {/* Queue list preview */}
+            {!workersLoading && queueStatus && queueStatus.length > 0 && (
+              <div className="mt-6">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-400">
+                        <th className="py-2 pr-4 font-medium">Queue</th>
+                        <th className="py-2 pr-4 font-medium">Type</th>
+                        <th className="py-2 pr-4 font-medium">Priority</th>
+                        <th className="py-2 pr-4 font-medium">Concurrency</th>
+                        <th className="py-2 pr-4 font-medium">Timeout</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {queueStatus.slice(0, 6).map((q: any, idx: number) => (
+                        <tr key={idx} className="border-t border-gray-700 text-gray-300">
+                          <td className="py-2 pr-4">{q.queue_name ?? q.name ?? '—'}</td>
+                          <td className="py-2 pr-4">{q.worker_type?.value ?? q.worker_type ?? '—'}</td>
+                          <td className="py-2 pr-4">{q.priority ?? '—'}</td>
+                          <td className="py-2 pr-4">{q.concurrency ?? '—'}</td>
+                          <td className="py-2 pr-4">{q.timeout ? `${q.timeout}s` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {queueStatus.length > 6 && (
+                  <p className="text-xs text-gray-500 mt-2">+{queueStatus.length - 6} more queues…</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
