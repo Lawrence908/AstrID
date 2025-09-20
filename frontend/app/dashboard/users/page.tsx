@@ -41,7 +41,7 @@ const mockUsers = [
   // MOCK DATA - Example users for different roles
   {
     id: 'user-002',
-    email: 'researcher@astrid.com', // MOCK
+    email: 'researcher@astrid.chrislawrence.ca', // MOCK
     name: 'Dr. Sarah Chen', // MOCK
     role: 'Researcher',
     status: 'active',
@@ -57,7 +57,7 @@ const mockUsers = [
   },
   {
     id: 'user-003',
-    email: 'curator@astrid.com', // MOCK
+    email: 'curator@astrid.chrislawrence.ca', // MOCK
     name: 'Mike Rodriguez', // MOCK
     role: 'Curator',
     status: 'active',
@@ -73,7 +73,7 @@ const mockUsers = [
   },
   {
     id: 'user-004',
-    email: 'viewer@astrid.com', // MOCK
+    email: 'viewer@astrid.chrislawrence.ca', // MOCK
     name: 'Alex Johnson', // MOCK
     role: 'Viewer',
     status: 'inactive',

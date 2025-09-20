@@ -77,7 +77,7 @@ export default function SettingsPage() {
       connectionPool: 10
     },
     api: {
-      baseUrl: 'https://api.astrid.com',
+      baseUrl: 'https://api.astrid.chrislawrence.ca',
       version: 'v1',
       rateLimit: 1000,
       timeout: 30,

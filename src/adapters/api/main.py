@@ -9,9 +9,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import redis.asyncio as redis
 
 from src.adapters.api.routes import auth, health, mlflow, storage, stream
 from src.adapters.api.routes.workers import router as workers_router
+from src.adapters.api.docs import create_openapi_schema
+from src.adapters.api.versioning import APIVersioningMiddleware
+from src.adapters.api.rate_limiting import RateLimitingMiddleware, RATE_LIMITS
 from src.core.api.response_wrapper import create_response
 from src.core.constants import (
     API_DESCRIPTION,
@@ -22,6 +26,7 @@ from src.core.constants import (
     CORS_ALLOW_METHODS,
     CORS_ORIGINS,
     ENVIRONMENT,
+    REDIS_URL,
 )
 from src.core.exceptions import AstrIDException
 from src.domains.catalog.api.routes import router as catalog_router
@@ -43,7 +48,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("Starting AstrID API...")
     try:
-        # Add any startup logic here (database connections, background services, etc.)
+        # Initialize Redis connection for rate limiting
+        redis_client = redis.from_url(REDIS_URL)
+        app.state.redis_client = redis_client
+        
+        # Test Redis connection
+        await redis_client.ping()
+        logger.info("Redis connection established for rate limiting")
+        
         logger.info("AstrID API startup completed successfully")
     except Exception as e:
         logger.error(f"Failed to start AstrID API: {str(e)}")
@@ -54,7 +66,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     logger.info("Shutting down AstrID API...")
     try:
-        # Add any cleanup logic here (close connections, stop services, etc.)
+        # Close Redis connection
+        if hasattr(app.state, 'redis_client'):
+            await app.state.redis_client.close()
+            logger.info("Redis connection closed")
+        
         logger.info("AstrID API shutdown completed successfully")
     except Exception as e:
         logger.error(f"Error during AstrID API shutdown: {str(e)}")
@@ -73,8 +89,29 @@ app = FastAPI(
         "displayRequestDuration": True,
         "filter": True,
         "syntaxHighlight": {"theme": "monokai"},
+        "tryItOutEnabled": True,
+        "requestSnippetsEnabled": True,
+        "requestSnippets": {
+            "generators": {
+                "curl_bash": {
+                    "title": "cURL (bash)",
+                    "syntax": "bash"
+                },
+                "curl_powershell": {
+                    "title": "cURL (PowerShell)",
+                    "syntax": "powershell"
+                },
+                "curl_cmd": {
+                    "title": "cURL (CMD)",
+                    "syntax": "bash"
+                }
+            }
+        }
     },
 )
+
+# Override OpenAPI schema with comprehensive documentation
+app.openapi = lambda: create_openapi_schema(app)
 
 # Add CORS middleware
 app.add_middleware(
@@ -84,6 +121,12 @@ app.add_middleware(
     allow_methods=CORS_ALLOW_METHODS,
     allow_headers=CORS_ALLOW_HEADERS,
 )
+
+# Add API versioning middleware
+app.add_middleware(APIVersioningMiddleware, default_version="v1")
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitingMiddleware, default_limits=RATE_LIMITS)
 
 
 # Exception handlers
