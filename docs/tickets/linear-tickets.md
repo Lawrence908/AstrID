@@ -385,6 +385,19 @@
   - [ ] Add validation event tracking
   - [ ] Create feedback collection system
 
+#### ASTR-111: Expert Review Process for Anomaly Confirmation
+- **Project**: ASTRID-CORE
+- **Priority**: P2 (High)
+- **Labels**: `core-domain`, `curation`, `expert-review`
+- **Estimated Time**: 5 days
+- **Dependencies**: ASTR-81, ASTR-82
+- **Description**: Implement expert review workflow for anomaly validation and scientific importance rating
+- **Subtasks**:
+  - [ ] Set up expert notification system and alerts
+  - [ ] Create expert review interface and dashboard
+  - [ ] Implement anomaly rating and confirmation system
+  - [ ] Add high-priority discovery tracking and management
+
 ### Catalog Domain
 
 #### ASTR-83: Data Cataloging
@@ -463,6 +476,45 @@
   - [ ] Add real-time streaming updates
   - [ ] Create user management interface
 
+#### ASTR-108: Email Notification for Detected Anomalies
+- **Project**: ASTRID-API
+- **Priority**: P2 (High)
+- **Labels**: `api`, `notifications`, `email`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-81
+- **Description**: Implement SendGrid email notification system for anomaly detection alerts
+- **Subtasks**:
+  - [ ] Set up SendGrid integration and configuration
+  - [ ] Define criteria for notable anomaly detection
+  - [ ] Create email templates for anomaly alerts
+  - [ ] Implement notification toggle and preferences
+
+#### ASTR-109: Anomaly Timeline Feature for React Frontend
+- **Project**: ASTRID-API
+- **Priority**: P2 (High)
+- **Labels**: `ui`, `frontend`, `timeline`, `visualization`
+- **Estimated Time**: 3 days
+- **Dependencies**: ASTR-81, ASTR-84
+- **Description**: Add interactive timeline view to display detected anomalies over time
+- **Subtasks**:
+  - [ ] Create timeline component with real-time updates
+  - [ ] Implement anomaly detail views and navigation
+  - [ ] Add external resource links and sky map integration
+  - [ ] Design responsive timeline layout for homepage
+
+#### ASTR-110: Virtual Sky Observatory 3D Visualization (Stretch Goal)
+- **Project**: ASTRID-API
+- **Priority**: P4 (Low)
+- **Labels**: `ui`, `frontend`, `3d`, `visualization`, `stretch-goal`
+- **Estimated Time**: 8-12 weeks
+- **Dependencies**: ASTR-81, ASTR-84, ASTR-109
+- **Description**: Create immersive 3D virtual sky observatory for exploring astronomical data
+- **Subtasks**:
+  - [ ] Research and select 3D visualization technology (Three.js/WebGL)
+  - [ ] Design 3D sky sphere with coordinate mapping system
+  - [ ] Implement interactive 3D interface with camera controls
+  - [ ] Integrate astronomical image projection and anomaly highlighting
+
 #### ASTR-105: Testing & Diagnostics Page
 - **Project**: ASTRID-API
 - **Priority**: P3 (Medium)
@@ -521,6 +573,19 @@
   - [ ] Create model evaluation metrics
   - [ ] Implement model deployment automation
 
+#### ASTR-106: Training Notebook for Model Training and MLflow Logging
+- **Project**: ASTRID-ML
+- **Priority**: P2 (High)
+- **Labels**: `ml`, `notebook`, `training`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-88
+- **Description**: Create Jupyter notebook for initial model training with MLflow integration
+- **Subtasks**:
+  - [ ] Set up data loading and preprocessing steps
+  - [ ] Implement training loop with MLflow logging
+  - [ ] Add metric tracking and validation
+  - [ ] Create troubleshooting and debugging tools
+
 ### Model Operations
 
 #### ASTR-90: Model Serving
@@ -569,6 +634,19 @@
   - [ ] Add preprocessing workers
   - [ ] Create differencing workers
   - [ ] Implement detection workers
+
+#### ASTR-107: Task Scheduler for Automated Inference Runs
+- **Project**: ASTRID-WORK
+- **Priority**: P2 (High)
+- **Labels**: `workflow`, `scheduler`, `automation`
+- **Estimated Time**: 2 days
+- **Dependencies**: ASTR-91
+- **Description**: Set up task scheduler for automated inference pipeline execution
+- **Subtasks**:
+  - [ ] Review existing Docker and Prefect scheduling configuration
+  - [ ] Configure cron jobs or task scheduler for inference runs
+  - [ ] Set up log capture and monitoring for scheduled runs
+  - [ ] Test and validate automated execution
 
 #### ASTR-104: Workers Operations Page & Dashboard Integration
 - **Project**: ASTRID-API
@@ -753,6 +831,19 @@
   - [ ] Update Prefect DB URL with pool params
   - [ ] Document Transaction pooling compatibility
   - [ ] Add verification steps and health checks
+
+#### ASTR-112: Data Backup and Disaster Recovery System
+- **Project**: ASTRID-INFRA
+- **Priority**: P4 (Low)
+- **Labels**: `infrastructure`, `backup`, `disaster-recovery`
+- **Estimated Time**: 3 days
+- **Dependencies**: ASTR-70, ASTR-71, ASTR-88
+- **Description**: Implement comprehensive backup and disaster recovery system for data protection and business continuity
+- **Subtasks**:
+  - [ ] Set up automated database backup system
+  - [ ] Implement cloud storage redundancy and versioning
+  - [ ] Create ML model and artifact backup procedures
+  - [ ] Add disaster recovery testing and documentation
 
 
 ---
