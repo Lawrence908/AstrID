@@ -75,7 +75,7 @@ The API supports multiple versioning strategies:
     openapi_schema["info"]["contact"] = {
         "name": "AstrID Team",
         "email": "astronomical.identification@gmail.com",
-        "url": "https://github.com/astrid-project"
+        "url": "https://github.com/Lawrence908/AstrID"
     }
     
     openapi_schema["info"]["license"] = {

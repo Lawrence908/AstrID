@@ -535,4 +535,4 @@ For additional help:
 - **Documentation**: [https://docs.astrid.chrislawrence.ca](https://docs.astrid.chrislawrence.ca)
 - **API Reference**: [https://api.astrid.chrislawrence.ca/docs](https://api.astrid.chrislawrence.ca/docs)
 - **Support Email**: astronomical.identification@gmail.com
-- **GitHub Issues**: [https://github.com/astrid-project/issues](https://github.com/astrid-project/issues)
+- **GitHub Issues**: [https://github.com/Lawrence908/AstrID/issues](https://github.com/Lawrence908/AstrID/issues)

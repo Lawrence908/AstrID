@@ -58,19 +58,21 @@ info:
   contact:
     name: AstrID Team
     email: astronomical.identification@gmail.com
-    url: https://github.com/astrid-project
+    url: https://github.com/Lawrence908/AstrID
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
   termsOfService: https://astrid.chrislawrence.ca/terms
 
 servers:
-  - url: https://api.astrid.chrislawrence.ca/v1
-    description: Production server
-  - url: https://staging-api.astrid.chrislawrence.ca/v1
-    description: Staging server
   - url: http://localhost:8000/v1
     description: Development server
+  - url: https://staging-api.astrid.chrislawrence.ca/v1
+    description: Staging server
+  - url: https://api.astrid.chrislawrence.ca/v1
+    description: Production server
+
+
 
 tags:
   - name: observations
