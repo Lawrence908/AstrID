@@ -2,30 +2,30 @@
 
 This document outlines the Prefect workflow orchestration setup for AstrID, completing the requirements for task ASTR-91.
 
-## ✅ Completed Components
+##  Completed Components
 
 ### 1. Prefect Server Configuration
-- ✅ **Prefect server configured in `docker-compose.yaml`**
+-  **Prefect server configured in `docker-compose.yaml`**
   - Server runs on port 4200 with Supabase PostgreSQL backend
   - Proper health checks and networking configuration
   - Environment variable support for configuration
 
 ### 2. Observation Processing Flows
-- ✅ **Main processing flow** (`src/adapters/scheduler/flows/process_new.py`)
+-  **Main processing flow** (`src/adapters/scheduler/flows/process_new.py`)
   - Integrated with existing data ingestion service
   - Uses Dramatiq workers for async processing
   - Handles ingestion → preprocessing → differencing → inference → notification pipeline
   - Proper error handling and logging
 
 ### 3. Model Training Workflows
-- ✅ **Training flow** (`src/adapters/scheduler/flows/model_training.py`)
+-  **Training flow** (`src/adapters/scheduler/flows/model_training.py`)
   - Data preparation and training pipeline
   - Model evaluation and performance validation
   - Automated model registration based on performance criteria
   - Scheduled retraining based on new data and performance degradation
 
 ### 4. Monitoring and Alerting
-- ✅ **Monitoring flows** (`src/adapters/scheduler/flows/monitoring.py`)
+-  **Monitoring flows** (`src/adapters/scheduler/flows/monitoring.py`)
   - System health monitoring (database, Redis, storage, workers)
   - Data pipeline health checks and performance monitoring
   - Model performance monitoring and drift detection
@@ -52,7 +52,7 @@ docker/
 └── docker-compose.yaml        # Updated with Prefect services
 ```
 
-## 🚀 Deployment & Usage
+##  Deployment & Usage
 
 ### Quick Start
 
@@ -105,7 +105,7 @@ prefect flow-run ls --limit 10
 | **System Monitoring** | Every 15 minutes | Health checks and alerts |
 | **Daily Reports** | Daily 9 AM | Operational summaries |
 
-## 🔧 Configuration
+##  Configuration
 
 ### Environment Variables
 
@@ -139,7 +139,7 @@ Flows can be configured with parameters:
 }
 ```
 
-## 🏗️ Architecture Integration
+##  Architecture Integration
 
 ### Event-Driven Orchestration
 
@@ -161,7 +161,7 @@ graph TD
 - **MLflow**: Experiment tracking and model registry
 - **Supabase**: Database for metadata and flow state
 
-## 📊 Monitoring & Observability
+##  Monitoring & Observability
 
 ### Health Checks
 - System component status (DB, Redis, storage)
@@ -212,7 +212,7 @@ graph TD
   - Prefect: http://localhost:4200/health
   - API: http://localhost:8000/health
 
-## 🔄 Next Steps
+##  Next Steps
 
 1. **Performance Optimization**:
    - Fine-tune worker concurrency settings
@@ -236,7 +236,7 @@ graph TD
 
 ---
 
-**Status**: ✅ **COMPLETED** - All subtasks of ASTR-91 have been implemented and tested.
+**Status**:  **COMPLETED** - All subtasks of ASTR-91 have been implemented and tested.
 
 **Related Tasks**: 
 - ASTR-69: Development Environment Setup (parent task)

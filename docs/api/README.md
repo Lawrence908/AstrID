@@ -2,7 +2,7 @@
 
 Welcome to the AstrID API documentation. This comprehensive guide provides everything you need to integrate with the AstrID astronomical identification system.
 
-## 📚 Documentation Index
+## Documentation Index
 
 ### Getting Started
 - [Quick Start Guide](usage-guide.md#getting-started) - Get up and running in minutes
@@ -25,7 +25,7 @@ Welcome to the AstrID API documentation. This comprehensive guide provides every
 - [Test Scripts](../scripts/test-api.sh) - Automated testing scripts
 - [Test Configuration](../tests/api/) - Test configuration and fixtures
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Authentication
 
@@ -81,7 +81,7 @@ curl -X POST "http://localhost:8000/v1/detections/infer" \
   }'
 ```
 
-## 📋 API Endpoints Overview
+## API Endpoints Overview
 
 ### Core Endpoints
 
@@ -112,7 +112,7 @@ curl -X POST "http://localhost:8000/v1/detections/infer" \
 | `/workflows/flows/{id}/cancel` | POST | Cancel workflow |
 | `/workflows/flows/{id}/logs` | GET | Get workflow logs |
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -142,7 +142,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 | Workflows | 50 requests | 1 hour |
 | Admin | 10,000 requests | 1 hour |
 
-## 🧪 Testing
+## Testing
 
 ### Run API Tests
 
@@ -165,7 +165,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 - **Security Tests**: Authentication and authorization testing
 - **Rate Limiting Tests**: Rate limit enforcement testing
 
-## 📊 Monitoring and Observability
+## Monitoring and Observability
 
 ### Health Checks
 
@@ -195,7 +195,7 @@ All API requests and responses are logged with:
 - Error details
 - Rate limit information
 
-## 🔒 Security
+## Security
 
 ### Authentication
 - JWT-based authentication
@@ -215,7 +215,7 @@ All API requests and responses are logged with:
 - SQL injection prevention
 - XSS protection
 
-## 🚀 Deployment
+## Deployment
 
 ### Docker
 
@@ -245,7 +245,7 @@ docker-compose logs -f api
 - Set up monitoring and alerting
 - Implement backup and recovery procedures
 
-## 📞 Support
+## Support
 
 ### Getting Help
 
@@ -260,7 +260,7 @@ docker-compose logs -f api
 - **GitHub Discussions**: [https://github.com/Lawrence908/AstrID/discussions](https://github.com/Lawrence908/AstrID/discussions)
 - **Stack Overflow**: Tag questions with `astrid-api`
 
-## 📝 Changelog
+## Changelog
 
 ### Version 1.0.0 (Current)
 - Initial API release
@@ -277,7 +277,7 @@ docker-compose logs -f api
 - Enhanced monitoring dashboard
 - GraphQL API support
 
-## 📄 License
+## License
 
 This API is licensed under the MIT License. See [LICENSE](../../LICENSE) for details.
 
