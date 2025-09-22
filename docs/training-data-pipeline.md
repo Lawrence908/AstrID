@@ -4,6 +4,113 @@
 
 This document outlines the complete data pipeline for training the U-Net anomaly detection model, from raw astronomical observations to curated training datasets. The pipeline integrates with the existing AstrID workflow to provide real, validated data for model training.
 
+## Quick Runbook: Preparing Real Data for Training
+
+Follow these steps to populate real detections and create a training dataset consumable by the notebooks `notebooks/ml_training_data/real_data_loading.ipynb` and `notebooks/training/model_training.ipynb`.
+
+### 0) Prerequisites
+- Services running: api, worker, prefect, mlflow, redis
+- Database migrated (includes training tables)
+- Environment variables set for Supabase and R2
+
+Verify health:
+- GET http://localhost:8000/health
+- MLflow UI: http://localhost:5000
+- Prefect UI: http://localhost:4200
+
+### 1) Ingest observations
+Goal: create `observations` rows and store raw FITS in R2.
+
+Options:
+- Prefect flow (recommended): trigger observation ingestion in UI or via your existing endpoint/CLI.
+- API/Worker (if you have direct endpoints): use your ingestion route to pull a small time window.
+
+Confirm:
+- Query DB table `observations` has new rows with recent `observation_time`.
+- R2 shows raw FITS for those observations.
+
+### 2) Preprocess images
+Goal: create `PreprocessRun` rows and processed FITS in R2.
+
+- Trigger preprocessing (Prefect/worker) for the ingested observations.
+
+Confirm:
+- DB contains `preprocess_runs` with status completed.
+- R2 has processed FITS paths referenced by the runs.
+
+### 3) Difference and extract sources
+Goal: create `DifferenceRun` and `Candidate` rows; store difference images in R2.
+
+- Trigger differencing (Prefect/worker). Ensure reference selection is configured.
+
+Confirm:
+- DB has `difference_runs` completed, and `candidates` present.
+- R2 has difference FITS referenced by runs.
+
+### 4) Run ML detection
+Goal: populate `detections` with confidence scores; optionally mark some validated.
+
+- Trigger detection (Prefect/worker). This runs the U-Net inference over difference images.
+
+Confirm:
+- DB contains `detections` with `confidence_score > 0` and recent timestamps.
+- Optional: set `is_validated=true` on a subset (via your validation UI/flow) to test the validated-only path.
+
+### 5) Create training dataset (API)
+Goal: collect detections in a time window into a `TrainingDataset` + `TrainingSample`s and log minimal stats to MLflow.
+
+Endpoint:
+- POST http://localhost:8000/training/datasets/collect
+
+Body example:
+```json
+{
+  "survey_ids": ["hst"],
+  "start": "2024-01-01T00:00:00",
+  "end": "2024-12-31T23:59:59",
+  "confidence_threshold": 0.7,
+  "max_samples": 200,
+  "name": "hst_2024_training"
+}
+```
+
+Behavior:
+- Collector pulls detections joined to observations in the time range.
+- Prefers validated detections; if none, falls back to high-confidence non-validated.
+- Creates one `training_datasets` row and associated `training_samples` rows.
+- Logs dataset metrics to MLflow (best-effort).
+
+Confirm:
+- GET http://localhost:8000/training/datasets → returns newly created dataset.
+- GET http://localhost:8000/training/datasets/{dataset_id} → shows counts.
+- MLflow run named `training_data_{dataset_id}` appears in UI.
+
+Tips if `total_samples` is 0:
+- Expand the date range.
+- Lower `confidence_threshold` (e.g., 0.5) to pick up more detections.
+- Ensure detection pipeline actually ran for the window.
+
+### 6) Load in notebook (smoke test)
+Notebook: `notebooks/ml_training_data/real_data_loading.ipynb`
+
+Steps:
+1. Ensure `API_BASE = "http://localhost:8000"` (no `/v1`).
+2. Run the cell that POSTs `/training/datasets/collect` (or copy the returned `dataset_id`).
+3. Run the list/detail cells to verify the dataset.
+
+Outcome: you get a `dataset_id` and basic counts. This verifies the pipeline up to dataset creation.
+
+### 7) Train with real data
+Notebook: `notebooks/training/model_training.ipynb`
+
+Integrate dataset_id:
+- Add a small helper cell that fetches samples for `dataset_id` using an API route (or extend the API to provide sample listings) and replaces the synthetic data loader with real paths + masks.
+
+Checklist:
+- Confirm GPU/MLflow settings.
+- Start training; monitor in MLflow.
+
+---
 ## Pipeline Architecture
 
 ### 1. Data Sources and Ingestion
