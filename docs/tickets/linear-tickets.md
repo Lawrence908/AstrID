@@ -586,6 +586,21 @@
   - [ ] Add metric tracking and validation
   - [ ] Create troubleshooting and debugging tools
 
+#### ASTR-113: Real Data Loading Integration for Training Pipeline
+- **Project**: ASTRID-ML
+- **Priority**: P2 (High)
+- **Labels**: `ml`, `data-pipeline`, `training`
+- **Estimated Time**: 3 days
+- **Dependencies**: ASTR-106, ASTR-88, ASTR-81, ASTR-76, ASTR-73
+- **Description**: Implement real data loading functions that integrate with the complete AstrID workflow pipeline, enabling training on validated astronomical observations and human-labeled detections
+- **Subtasks**:
+  - [ ] Create TrainingDataCollector service for harvesting validated detections
+  - [ ] Implement RealDataLoader class to replace synthetic data generation
+  - [ ] Add TrainingDataset entity for dataset versioning and tracking
+  - [ ] Integrate with human validation labels from ASTR-82
+  - [ ] Add data pipeline orchestration with Dramatiq workers and Prefect flows
+  - [ ] Enhance MLflow integration for real data metrics and lineage
+
 ### Model Operations
 
 #### ASTR-90: Model Serving

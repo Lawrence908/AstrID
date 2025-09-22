@@ -1,0 +1,150 @@
+# AstrID Training Configuration Template
+# ASTR-106: Training Notebook Configuration
+
+# Experiment Settings
+experiment:
+  name: "unet_anomaly_detection"
+  description: "U-Net anomaly detection training experiments"
+  tags:
+    model_type: "unet"
+    task: "anomaly_detection"
+    dataset: "astronomical_images"
+    framework: "pytorch"
+
+# Model Architecture
+model:
+  name: "unet_anomaly_detector"
+  architecture: "unet"
+  input_channels: 1
+  output_channels: 1
+  input_size: [512, 512]
+  initial_filters: 64
+  depth: 4
+
+# Training Parameters
+training:
+  batch_size: 16
+  learning_rate: 0.001
+  num_epochs: 100
+  weight_decay: 1e-4
+  gradient_clip_norm: 1.0
+  
+  # Early stopping
+  early_stopping_patience: 10
+  checkpoint_frequency: 5
+  
+  # Learning rate scheduling
+  scheduler:
+    type: "ReduceLROnPlateau"
+    factor: 0.5
+    patience: 5
+    min_lr: 1e-6
+
+# Data Configuration
+data:
+  validation_split: 0.2
+  test_split: 0.1
+  num_workers: 2
+  pin_memory: true
+  
+  # Data augmentation
+  augmentation:
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    rotation_degrees: 15
+    translation: [0.1, 0.1]
+    scale: [0.9, 1.1]
+    normalization:
+      mean: [0.5]
+      std: [0.5]
+
+# MLflow Configuration
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  artifact_root: "r2://astrid-mlflow/artifacts"
+  experiment_auto_logging: true
+  model_registry_enabled: true
+
+# Energy Tracking (ASTR-101)
+energy_tracking:
+  enabled: true
+  sampling_interval: 1.0  # seconds
+  carbon_intensity_kg_per_kwh: 0.233
+  electricity_cost_usd_per_kwh: 0.12
+
+# Performance Metrics (ASTR-102)
+metrics:
+  confidence_threshold: 0.5
+  
+  # Classification metrics
+  classification:
+    accuracy: true
+    precision: ["macro", "micro", "weighted"]
+    recall: ["macro", "micro", "weighted"]
+    f1_score: ["macro", "micro", "weighted"]
+    auroc: true
+    auprc: true
+    mcc: true
+    balanced_accuracy: true
+  
+  # Calibration metrics
+  calibration:
+    ece: true
+    brier_score: true
+  
+  # Performance metrics
+  performance:
+    latency_percentiles: [50, 95]
+    throughput: true
+  
+  # Artifacts
+  artifacts:
+    confusion_matrix: true
+    roc_curve: true
+    pr_curve: true
+    calibration_curve: true
+
+# Preprocessing (ASTR-76)
+preprocessing:
+  enabled: true
+  bias_correction: true
+  flat_correction: true
+  dark_correction: true
+  cosmic_ray_removal: true
+  background_subtraction: true
+  noise_reduction: true
+
+# Visualization
+visualization:
+  plot_training_curves: true
+  plot_confusion_matrix: true
+  plot_roc_curve: true
+  plot_precision_recall_curve: true
+  plot_energy_consumption: true
+  num_prediction_samples: 5
+
+# Debugging
+debugging:
+  inspect_predictions: true
+  analyze_training_issues: true
+  log_gradients: false
+  log_weights: false
+
+# Hardware
+hardware:
+  device: "auto"  # auto, cpu, cuda
+  mixed_precision: false
+  gradient_checkpointing: false
+
+# Logging
+logging:
+  level: "INFO"
+  log_frequency: 10  # batches
+  save_predictions: false
+  save_gradients: false
+
+# Reproducibility
+reproducibility:
+  seed: 42
+  deterministic: true
+  benchmark: false

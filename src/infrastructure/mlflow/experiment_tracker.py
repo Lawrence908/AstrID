@@ -103,13 +103,16 @@ class ExperimentTracker:
             # Check if experiment already exists
             try:
                 existing_experiment = self.client.get_experiment_by_name(name)
-                self.logger.info(
-                    f"Experiment '{name}' already exists with ID: {existing_experiment.experiment_id}"
-                )
-                return existing_experiment.experiment_id
+                if existing_experiment is not None:
+                    self.logger.info(
+                        f"Experiment '{name}' already exists with ID: {existing_experiment.experiment_id}"
+                    )
+                    return existing_experiment.experiment_id
+                else:
+                    self.logger.info(f"Experiment '{name}' does not exist, will create it")
             except MlflowException:
                 # Experiment doesn't exist, create it
-                pass
+                self.logger.info(f"Experiment '{name}' does not exist, will create it")
 
             # Create new experiment
             experiment_id = self.client.create_experiment(
