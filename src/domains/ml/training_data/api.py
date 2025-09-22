@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.api.response_wrapper import create_response
 from src.core.db.session import get_db
@@ -32,7 +33,7 @@ class CollectionParams(BaseModel):
 
 @router.post("/datasets/collect")
 async def collect_training_data(
-    params: CollectionParams, db: Session = Depends(get_db)
+    params: CollectionParams, db: AsyncSession = Depends(get_db)
 ):
     r2 = R2StorageClient()
     collector = TrainingDataCollector(db, r2)
@@ -47,11 +48,11 @@ async def collect_training_data(
         quality_score_threshold=params.quality_score_threshold,
         max_samples=params.max_samples,
     )
-    samples = collector.collect_training_data(parsed)
+    samples = await collector.collect_training_data(parsed)
     quality = collector.validate_data_quality(samples)
 
     manager = TrainingDatasetManager(db)
-    ds = manager.create_dataset(
+    ds = await manager.create_dataset(
         name=params.name,
         created_by="api",  # TODO: map from auth user
         samples=samples,
@@ -72,10 +73,11 @@ async def collect_training_data(
 
 
 @router.get("/datasets")
-async def list_training_datasets(db: Session = Depends(get_db)):
-    datasets = (
-        db.query(TrainingDataset).order_by(TrainingDataset.created_at.desc()).all()
+async def list_training_datasets(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(TrainingDataset).order_by(TrainingDataset.created_at.desc())
     )
+    datasets = result.scalars().all()
     return create_response(
         [
             {
@@ -92,13 +94,18 @@ async def list_training_datasets(db: Session = Depends(get_db)):
 
 
 @router.get("/datasets/{dataset_id}")
-async def get_training_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    ds = db.get(TrainingDataset, dataset_id)
+async def get_training_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
+    ds = await db.get(TrainingDataset, dataset_id)
     if not ds:
         return create_response({"error": {"message": "Not found"}}, status_code=404)
-    samples = (
-        db.query(TrainingSample).filter(TrainingSample.dataset_id == ds.id).count()
+    result = await db.execute(
+        select(func.count()).select_from(
+            select(TrainingSample.id)
+            .where(TrainingSample.dataset_id == ds.id)
+            .subquery()
+        )
     )
+    samples = result.scalar_one()
     return create_response(
         {
             "id": str(ds.id),

@@ -35,6 +35,9 @@ from src.adapters.workers.ingestion.observation_workers import (  # noqa: E402
 from src.adapters.workers.preprocessing.preprocessing_workers import (  # noqa: E402
     preprocess_observation,
 )
+from src.adapters.workers.training_data import (  # noqa: E402
+    collect_training_data_worker,
+)
 
 
 # Legacy tasks for backward compatibility
@@ -76,6 +79,13 @@ def legacy_notify_detection(detection_data: dict):
     logger.info(f"Starting legacy notification for detection {detection_data}")
     # Redirect to new worker
     return send_notifications.send(detection_data.get("detection_id", "unknown"))
+
+
+@dramatiq.actor(queue_name="training_data")
+def legacy_collect_training_data(collection_params: dict):
+    """Legacy wrapper to trigger training data collection actor."""
+    logger.info("Starting training data collection via legacy wrapper")
+    return collect_training_data_worker.send(collection_params)
 
 
 # Health check task

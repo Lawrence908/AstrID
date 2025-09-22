@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from src.adapters.imaging.fits_io import FITSProcessor
@@ -29,35 +31,40 @@ class TrainingDataCollectionParams:
 class TrainingDataCollector:
     """Service for collecting training data from validated detections."""
 
-    def __init__(self, db_session: Session, r2_client: R2StorageClient):
+    def __init__(self, db_session: Session | AsyncSession, r2_client: R2StorageClient):
         self.db = db_session
         self.r2 = r2_client
         self.fits = FITSProcessor()
         self.preprocessor = AstronomicalImageProcessor()
 
-    def collect_training_data(
+    async def collect_training_data(
         self, params: TrainingDataCollectionParams
     ) -> list[TrainingSample]:
         """Collect training samples from validated detections (minimal implementation)."""
-        # NOTE: This is a thin MVP that demonstrates wiring. We will enrich queries/logic next.
         from src.domains.detection.models import Detection
         from src.domains.observations.models import Observation
 
-        q = (
-            self.db.query(Detection, Observation)
+        stmt = (
+            select(Detection, Observation)
             .join(Observation, Detection.observation_id == Observation.id)
-            .filter(Detection.is_validated.is_(True))
-            .filter(Detection.confidence_score >= params.confidence_threshold)
+            .where(Detection.is_validated.is_(True))
+            .where(Detection.confidence_score >= params.confidence_threshold)
             .order_by(Detection.created_at.desc())
+            .limit(params.max_samples)
         )
 
         if params.anomaly_types:
-            q = q.filter(Detection.human_label.in_(params.anomaly_types))
+            stmt = stmt.where(Detection.human_label.in_(params.anomaly_types))
 
-        q = q.limit(params.max_samples)
+        # Execute for async or sync sessions
+        if isinstance(self.db, AsyncSession):
+            result = await self.db.execute(stmt)
+            rows = result.all()
+        else:
+            rows = self.db.execute(stmt).all()
 
         samples: list[TrainingSample] = []
-        for det, obs in q.all():
+        for det, obs in rows:
             # Use stored R2 paths; if not present, skip for now
             image_path = obs.fits_file_path or obs.fits_url
             if not image_path:
@@ -74,7 +81,7 @@ class TrainingDataCollector:
                     "confidence": float(det.confidence_score),
                     "validated": True,
                 },
-                sample_metadata={
+                metadata={
                     "survey": str(obs.survey_id),
                     "filter_band": obs.filter_band,
                     "exposure_time": float(obs.exposure_time),
@@ -138,10 +145,10 @@ class RealDataLoader:
 class TrainingDatasetManager:
     """Manager for creating and managing TrainingDataset records."""
 
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: Session | AsyncSession):
         self.db = db_session
 
-    def create_dataset(
+    async def create_dataset(
         self,
         name: str,
         created_by: str,
@@ -159,14 +166,20 @@ class TrainingDatasetManager:
             status="active",
         )
         self.db.add(ds)
-        self.db.flush()  # get ds.id
+        if isinstance(self.db, AsyncSession):
+            await self.db.flush()  # get ds.id
+        else:
+            self.db.flush()
 
         # Attach samples to dataset
         for s in samples:
             s.dataset_id = ds.id
             self.db.add(s)
 
-        self.db.commit()
+        if isinstance(self.db, AsyncSession):
+            await self.db.commit()
+        else:
+            self.db.commit()
 
         # Log to MLflow (best-effort)
         try:
