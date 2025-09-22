@@ -47,7 +47,7 @@ services:
     networks:
       - astrid-network
     command: >
-      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
+      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres?pool_size=1&max_overflow=0&connect_timeout=10 --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
     # Using Supabase PostgreSQL
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -66,7 +66,7 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://localhost:4200/api
-      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?pool_size=1&max_overflow=0&timeout=10
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}

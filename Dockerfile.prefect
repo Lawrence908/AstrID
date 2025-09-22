@@ -5,6 +5,12 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app/src
+ENV PIP_ROOT_USER_ACTION=ignore
+
+# Use a dedicated virtual environment for Python packages
+ENV VIRTUAL_ENV=/opt/venv
+RUN python -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -23,9 +29,9 @@ COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY scripts/ ./scripts/
 
-# Install Python dependencies (editable install requires src present)
+# Install Python dependencies into the venv (editable install requires src present)
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache-dir -e .
+    uv pip install --no-cache-dir -e .
 
 # Install requests for the wait script
 RUN pip install --no-cache-dir requests
