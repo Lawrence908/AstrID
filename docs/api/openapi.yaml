@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: AstrID API
   version: 1.0.0
@@ -65,9 +65,9 @@ info:
   termsOfService: https://astrid.chrislawrence.ca/terms
 
 servers:
-  - url: http://localhost:8000/v1
+  - url: http://127.0.0.1:8000
     description: Development server
-  - url: https://api.astrid.chrislawrence.ca/v1
+  - url: https://api.astrid.chrislawrence.ca
     description: Production server
 
 
