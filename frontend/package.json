@@ -6,7 +6,10 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync-docs": "rsync -av --delete ../docs/ ./public/docs/ --exclude '.git/' --exclude '.DS_Store' --exclude 'meetings/' --exclude 'api/' --exclude 'viu/' --exclude 'guides/'",
+    "predev": "npm run sync-docs",
+    "prebuild": "npm run sync-docs"
   },
   "dependencies": {
     "@supabase/auth-ui-react": "^0.4.7",

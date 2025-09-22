@@ -1,0 +1,151 @@
+@startuml AstrID System Architecture
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID System Architecture
+
+package "Frontend Layer" {
+    [Next.js Dashboard] as Dashboard
+    [React Components] as Components
+    [Tailwind CSS] as Styling
+}
+
+package "API Gateway Layer" {
+    [FastAPI Server] as API
+    [Authentication] as Auth
+    [Rate Limiting] as RateLimit
+    [API Documentation] as Docs
+}
+
+package "Domain Services Layer" {
+    package "Observations Domain" {
+        [Observation Service] as ObsService
+        [Survey Integration] as SurveyInt
+    }
+
+    package "Preprocessing Domain" {
+        [Preprocessing Service] as PreprocessService
+        [Calibration Engine] as Calibration
+        [WCS Handler] as WCS
+    }
+
+    package "Differencing Domain" {
+        [Differencing Service] as DiffService
+        [ZOGY Algorithm] as ZOGY
+        [Source Extraction] as SourceExt
+    }
+
+    package "Detection Domain" {
+        [Detection Service] as DetectionService
+        [U-Net Model] as UNet
+        [Anomaly Detection] as AnomalyDet
+    }
+
+    package "Curation Domain" {
+        [Validation Service] as ValidationService
+        [Human Interface] as HumanUI
+        [Alert System] as Alerts
+    }
+
+    package "Catalog Domain" {
+        [Catalog Service] as CatalogService
+        [Analytics Engine] as Analytics
+        [Export Service] as Export
+    }
+}
+
+package "Infrastructure Layer" {
+    package "Storage" {
+        [PostgreSQL] as DB
+        [Cloudflare R2] as R2
+        [Content Addressing] as CAS
+    }
+
+    package "Message Queue" {
+        [Redis] as Redis
+        [Dramatiq Workers] as Workers
+        [Prefect Flows] as Prefect
+    }
+
+    package "ML Infrastructure" {
+        [MLflow] as MLflow
+        [Model Registry] as ModelReg
+        [DVC] as DVC
+    }
+}
+
+package "External Services" {
+    [MAST API] as MAST
+    [SkyView API] as SkyView
+    [Astronomical Catalogs] as Catalogs
+}
+
+' Frontend connections
+Dashboard --> API
+Components --> API
+Styling --> Components
+
+' API Gateway connections
+API --> Auth
+API --> RateLimit
+API --> Docs
+API --> ObsService
+API --> PreprocessService
+API --> DiffService
+API --> DetectionService
+API --> ValidationService
+API --> CatalogService
+
+' Domain service connections
+ObsService --> SurveyInt
+ObsService --> DB
+ObsService --> R2
+
+PreprocessService --> Calibration
+PreprocessService --> WCS
+PreprocessService --> DB
+PreprocessService --> R2
+
+DiffService --> ZOGY
+DiffService --> SourceExt
+DiffService --> DB
+DiffService --> R2
+
+DetectionService --> UNet
+DetectionService --> AnomalyDet
+DetectionService --> ModelReg
+DetectionService --> DB
+DetectionService --> R2
+
+ValidationService --> HumanUI
+ValidationService --> Alerts
+ValidationService --> DB
+
+CatalogService --> Analytics
+CatalogService --> Export
+CatalogService --> DB
+
+' Infrastructure connections
+DB --> Redis
+Workers --> Redis
+Workers --> Prefect
+Workers --> R2
+
+MLflow --> ModelReg
+MLflow --> DVC
+MLflow --> R2
+
+' External service connections
+SurveyInt --> MAST
+SurveyInt --> SkyView
+SurveyInt --> Catalogs
+
+' Message flow
+ObsService --> Workers
+PreprocessService --> Workers
+DiffService --> Workers
+DetectionService --> Workers
+
+@enduml

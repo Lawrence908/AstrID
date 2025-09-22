@@ -1,0 +1,153 @@
+@startuml AstrID Domain Interactions
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID Domain Interactions
+
+package "Observations Domain" {
+    [Survey] as Survey
+    [Observation] as Observation
+    [ObservationService] as ObsService
+}
+
+package "Preprocessing Domain" {
+    [PreprocessRun] as PreprocessRun
+    [PreprocessingService] as PreprocessService
+    [CalibrationEngine] as CalibrationEngine
+}
+
+package "Differencing Domain" {
+    [DifferenceRun] as DifferenceRun
+    [Candidate] as Candidate
+    [DifferencingService] as DiffService
+    [ZOGYAlgorithm] as ZOGY
+}
+
+package "Detection Domain" {
+    [Model] as Model
+    [ModelRun] as ModelRun
+    [Detection] as Detection
+    [DetectionService] as DetectionService
+    [UNetModel] as UNet
+}
+
+package "Curation Domain" {
+    [ValidationEvent] as ValidationEvent
+    [Alert] as Alert
+    [ValidationService] as ValidationService
+    [HumanInterface] as HumanInterface
+}
+
+package "Catalog Domain" {
+    [CatalogEntry] as CatalogEntry
+    [Analytics] as Analytics
+    [CatalogService] as CatalogService
+}
+
+package "Infrastructure" {
+    [PostgreSQL] as DB
+    [Cloudflare R2] as R2
+    [Redis] as Redis
+    [Dramatiq] as Dramatiq
+}
+
+' Observation flow
+Survey --> Observation : contains
+Observation --> ObsService : managed by
+ObsService --> PreprocessService : triggers
+ObsService --> DB : persists
+ObsService --> R2 : stores files
+
+' Preprocessing flow
+Observation --> PreprocessRun : creates
+PreprocessRun --> PreprocessService : managed by
+PreprocessService --> CalibrationEngine : uses
+PreprocessService --> DiffService : triggers
+PreprocessService --> DB : persists
+PreprocessService --> R2 : stores files
+
+' Differencing flow
+Observation --> DifferenceRun : creates
+DifferenceRun --> Candidate : generates
+DifferenceRun --> DiffService : managed by
+DiffService --> ZOGY : uses
+DiffService --> DetectionService : triggers
+DiffService --> DB : persists
+DiffService --> R2 : stores files
+
+' Detection flow
+Candidate --> ModelRun : processes
+ModelRun --> Detection : creates
+ModelRun --> DetectionService : managed by
+DetectionService --> UNet : uses
+DetectionService --> ValidationService : triggers
+DetectionService --> DB : persists
+DetectionService --> R2 : stores files
+
+' Validation flow
+Detection --> ValidationEvent : creates
+Detection --> Alert : generates
+ValidationEvent --> ValidationService : managed by
+ValidationService --> HumanInterface : provides
+ValidationService --> CatalogService : triggers
+ValidationService --> DB : persists
+
+' Catalog flow
+Detection --> CatalogEntry : becomes
+CatalogEntry --> CatalogService : managed by
+CatalogService --> Analytics : uses
+CatalogService --> DB : persists
+
+' Infrastructure connections
+DB --> Redis : events
+Redis --> Dramatiq : triggers
+Dramatiq --> R2 : file operations
+
+' Cross-domain events
+ObsService --> Redis : "observation.ingested"
+PreprocessService --> Redis : "observation.preprocessed"
+DiffService --> Redis : "candidates.found"
+DetectionService --> Redis : "detections.created"
+ValidationService --> Redis : "detections.validated"
+CatalogService --> Redis : "catalog.updated"
+
+' Bounded Context Notes
+note right of ObsService
+  Bounded Context: Observations
+  Language: observation, survey, ingestion
+  Ownership: API + DB schemas
+end note
+
+note right of PreprocessService
+  Bounded Context: Preprocessing
+  Language: calibration, WCS, registration
+  Ownership: pipelines + workers
+end note
+
+note right of DiffService
+  Bounded Context: Differencing
+  Language: reference, ZOGY, candidates
+  Ownership: algorithms + thresholds
+end note
+
+note right of DetectionService
+  Bounded Context: Detection
+  Language: model, inference, score
+  Ownership: models + runs
+end note
+
+note right of ValidationService
+  Bounded Context: Curation
+  Language: review, label, alert
+  Ownership: human workflows
+end note
+
+note right of CatalogService
+  Bounded Context: Catalog
+  Language: entry, analytics
+  Ownership: catalog schemas
+end note
+
+@enduml
