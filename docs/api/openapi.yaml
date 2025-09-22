@@ -67,8 +67,6 @@ info:
 servers:
   - url: http://localhost:8000/v1
     description: Development server
-  - url: https://staging-api.astrid.chrislawrence.ca/v1
-    description: Staging server
   - url: https://api.astrid.chrislawrence.ca/v1
     description: Production server
 
