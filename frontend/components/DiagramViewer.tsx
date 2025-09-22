@@ -74,6 +74,54 @@ export default function DiagramViewer({ file }: DiagramViewerProps) {
 
   const endPan = () => { isPanningRef.current = false }
 
+  // Touch: pinch-zoom and one-finger pan
+  const lastTouchDistance = useRef<number | null>(null)
+  const getDistance = (a: Touch, b: Touch) => {
+    const dx = a.clientX - b.clientX
+    const dy = a.clientY - b.clientY
+    return Math.hypot(dx, dy)
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (!containerRef.current) return
+    if (e.touches.length === 1) {
+      isPanningRef.current = true
+      startRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        left: containerRef.current.scrollLeft,
+        top: containerRef.current.scrollTop
+      }
+    } else if (e.touches.length === 2) {
+      lastTouchDistance.current = getDistance(e.touches[0], e.touches[1])
+    }
+  }
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!containerRef.current) return
+    if (e.touches.length === 1 && isPanningRef.current) {
+      const t = e.touches[0]
+      const dx = t.clientX - startRef.current.x
+      const dy = t.clientY - startRef.current.y
+      containerRef.current.scrollLeft = startRef.current.left - dx
+      containerRef.current.scrollTop = startRef.current.top - dy
+    } else if (e.touches.length === 2) {
+      const dist = getDistance(e.touches[0], e.touches[1])
+      if (lastTouchDistance.current) {
+        const delta = dist - lastTouchDistance.current
+        const step = delta / 150
+        setScale((s) => Math.min(10, Math.max(0.25, parseFloat((s + step).toFixed(2)))))
+      }
+      lastTouchDistance.current = dist
+      e.preventDefault()
+    }
+  }
+
+  const onTouchEnd = () => {
+    isPanningRef.current = false
+    lastTouchDistance.current = null
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -134,6 +182,9 @@ export default function DiagramViewer({ file }: DiagramViewerProps) {
             onMouseMove={onMouseMove}
             onMouseUp={endPan}
             onMouseLeave={endPan}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
           >
             <div
               ref={innerRef}
