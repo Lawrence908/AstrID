@@ -33,7 +33,7 @@ const mainSections = [
     description: 'Manage astronomical observations and survey data',
     icon: <Eye className="w-8 h-8" />,
     href: '/dashboard/observations',
-    status: 'in-development',
+    status: 'completed',
     features: ['Observation Overview', 'Survey Integration', 'FITS Processing', 'Quality Assessment']
   },
   {
@@ -42,7 +42,7 @@ const mainSections = [
     description: 'View and analyze anomaly detections',
     icon: <Search className="w-8 h-8" />,
     href: '/dashboard/detections',
-    status: 'planned',
+    status: 'completed',
     features: ['Detection Visualization', 'Image Analysis', 'Anomaly Scoring', 'Human Validation']
   },
   {
@@ -51,7 +51,7 @@ const mainSections = [
     description: 'Monitor processing pipelines and orchestration',
     icon: <Workflow className="w-8 h-8" />,
     href: '/dashboard/workflows',
-    status: 'planned',
+    status: 'completed',
     features: ['Pipeline Monitoring', 'Task Management', 'Error Handling', 'Performance Metrics']
   },
   {
@@ -60,7 +60,7 @@ const mainSections = [
     description: 'System metrics and performance analytics',
     icon: <BarChart3 className="w-8 h-8" />,
     href: '/dashboard/analytics',
-    status: 'planned',
+    status: 'in-development',
     features: ['System Metrics', 'Performance Charts', 'Usage Statistics', 'Trend Analysis']
   },
   {
@@ -69,7 +69,7 @@ const mainSections = [
     description: 'Manage users, roles, and permissions',
     icon: <Users className="w-8 h-8" />,
     href: '/dashboard/users',
-    status: 'planned',
+    status: 'in-development',
     features: ['User Administration', 'Role Management', 'Permission Control', 'Activity Tracking']
   },
   {
@@ -78,7 +78,7 @@ const mainSections = [
     description: 'System configuration and preferences',
     icon: <Settings className="w-8 h-8" />,
     href: '/dashboard/settings',
-    status: 'planned',
+    status: 'in-development',
     features: ['System Configuration', 'API Settings', 'Notification Preferences', 'Data Management']
   }
 ]
@@ -245,7 +245,7 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-2">
               <Activity className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">14/32 tickets completed (43.8%)</span>
+              <span className="text-sm text-gray-300">22/33 tickets completed (66.7%)</span>
             </div>
           </div>
         </div>
@@ -268,11 +268,13 @@ export default function Home() {
                       {section.title}
                     </h3>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      section.status === 'in-development'
+                      section.status === 'completed'
+                        ? 'bg-green-900 text-green-300'
+                        : section.status === 'in-development'
                         ? 'bg-yellow-900 text-yellow-300'
                         : 'bg-gray-700 text-gray-300'
                     }`}>
-                      {section.status === 'in-development' ? 'In Development' : 'Planned'}
+                      {section.status === 'completed' ? 'Completed' : section.status === 'in-development' ? 'In Development' : 'Planned'}
                     </span>
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{section.description}</p>
