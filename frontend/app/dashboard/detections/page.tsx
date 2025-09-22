@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Search,
   Filter,
@@ -15,53 +15,10 @@ import {
   MapPin,
   Calendar,
   Zap,
-  Target
+  Target,
+  RefreshCw
 } from 'lucide-react'
-
-// MOCK DATA for demonstration - All data below is simulated
-const mockDetections = [
-  {
-    id: 'det-001',
-    observationId: 'obs-001',
-    ra: 123.456,
-    dec: 45.678,
-    confidence: 0.95,
-    magnitude: 18.5,
-    status: 'confirmed',
-    timestamp: '2025-01-15T10:35:00Z',
-    imageUrl: '/api/placeholder/400/300',
-    annotations: [
-      { x: 150, y: 200, type: 'source', label: 'Anomaly' },
-      { x: 300, y: 150, type: 'reference', label: 'Reference' }
-    ]
-  },
-  {
-    id: 'det-002',
-    observationId: 'obs-002',
-    ra: 234.567,
-    dec: 56.789,
-    confidence: 0.78,
-    magnitude: 19.2,
-    status: 'pending',
-    timestamp: '2025-01-15T11:20:00Z',
-    imageUrl: '/api/placeholder/400/300',
-    annotations: [
-      { x: 200, y: 250, type: 'source', label: 'Candidate' }
-    ]
-  },
-  {
-    id: 'det-003',
-    observationId: 'obs-003',
-    ra: 345.678,
-    dec: 67.890,
-    confidence: 0.45,
-    magnitude: 20.1,
-    status: 'rejected',
-    timestamp: '2025-01-15T12:05:00Z',
-    imageUrl: '/api/placeholder/400/300',
-    annotations: []
-  }
-]
+import { dashboardApi, DetectionStats } from '@/lib/api/dashboard'
 
 const statusConfig = {
   confirmed: { color: 'text-green-500', bg: 'bg-green-900', icon: CheckCircle, label: 'Confirmed' },
@@ -85,6 +42,10 @@ export default function DetectionsPage() {
     magnitude: '',
     dateRange: ''
   })
+  const [detections, setDetections] = useState<any[]>([])
+  const [stats, setStats] = useState<DetectionStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -94,6 +55,34 @@ export default function DetectionsPage() {
     if (confidence >= confidenceConfig.high.threshold) return 'high'
     if (confidence >= confidenceConfig.medium.threshold) return 'medium'
     return 'low'
+  }
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const [statsData, detectionsData] = await Promise.all([
+        dashboardApi.getDetectionStats(),
+        dashboardApi.getDetections(filters)
+      ])
+      
+      setStats(statsData)
+      setDetections(detectionsData)
+    } catch (err) {
+      console.error('Failed to fetch detections data:', err)
+      setError('Failed to load detections data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [filters])
+
+  const handleRefresh = () => {
+    fetchData()
   }
 
   return (
@@ -129,6 +118,14 @@ export default function DetectionsPage() {
                   List
                 </button>
               </div>
+              <button 
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center px-4 py-2 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Loading...' : 'Refresh'}
+              </button>
               <button className="flex items-center px-4 py-2 bg-astrid-blue text-white rounded-lg hover:bg-blue-600 transition-colors">
                 <Download className="w-4 h-4 mr-2" />
                 Export
@@ -143,8 +140,12 @@ export default function DetectionsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Total Detections</p>
-                <p className="text-2xl font-bold text-white">342</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-white">
+                  {loading ? '—' : stats?.total_detections?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Search className="w-8 h-8 text-astrid-blue" />
             </div>
@@ -153,8 +154,12 @@ export default function DetectionsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Confirmed</p>
-                <p className="text-2xl font-bold text-green-500">156</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-green-500">
+                  {loading ? '—' : stats?.confirmed?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
@@ -163,8 +168,12 @@ export default function DetectionsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Pending</p>
-                <p className="text-2xl font-bold text-yellow-500">89</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-yellow-500">
+                  {loading ? '—' : stats?.pending?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Clock className="w-8 h-8 text-yellow-500" />
             </div>
@@ -173,8 +182,12 @@ export default function DetectionsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">High Confidence</p>
-                <p className="text-2xl font-bold text-blue-500">203</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-blue-500">
+                  {loading ? '—' : stats?.high_confidence?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Star className="w-8 h-8 text-blue-500" />
             </div>
@@ -213,7 +226,7 @@ export default function DetectionsPage() {
                     <option value="">All Confidence</option>
                     <option value="high">High (≥80%)</option>
                     <option value="medium">Medium (60-79%)</option>
-                    <option value="low">Low (<60%)</option>
+                    <option value="low">Low (&lt;60%)</option>
                   </select>
                 </div>
 
@@ -225,9 +238,9 @@ export default function DetectionsPage() {
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-astrid-blue focus:border-transparent"
                   >
                     <option value="">All Magnitudes</option>
-                    <option value="bright">Bright (<18)</option>
+                    <option value="bright">Bright (&lt;18)</option>
                     <option value="medium">Medium (18-20)</option>
-                    <option value="faint">Faint (>20)</option>
+                    <option value="faint">Faint (&gt;20)</option>
                   </select>
                 </div>
 
@@ -248,7 +261,26 @@ export default function DetectionsPage() {
           <div className="lg:col-span-3">
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {mockDetections.map((detection) => {
+                {loading ? (
+                  <div className="col-span-full flex items-center justify-center py-12">
+                    <div className="flex items-center space-x-2 text-gray-400">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Loading detections...</span>
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="col-span-full flex items-center justify-center py-12">
+                    <div className="flex items-center space-x-2 text-red-400">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>{error}</span>
+                    </div>
+                  </div>
+                ) : detections.length === 0 ? (
+                  <div className="col-span-full flex items-center justify-center py-12">
+                    <div className="text-gray-400">No detections found</div>
+                  </div>
+                ) : (
+                  detections.map((detection) => {
                   const statusInfo = statusConfig[detection.status as keyof typeof statusConfig]
                   const StatusIcon = statusInfo.icon
                   const confidenceLevel = getConfidenceLevel(detection.confidence)
@@ -287,15 +319,15 @@ export default function DetectionsPage() {
                         <div className="space-y-2 text-sm text-gray-300">
                           <div className="flex items-center space-x-2">
                             <MapPin className="w-3 h-3" />
-                            <span>{detection.ra.toFixed(3)}°, {detection.dec.toFixed(3)}°</span>
+                            <span>{detection.ra?.toFixed(3)}°, {detection.dec?.toFixed(3)}°</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <Calendar className="w-3 h-3" />
-                            <span>{new Date(detection.timestamp).toLocaleDateString()}</span>
+                            <span>{new Date(detection.timestamp || detection.created_at).toLocaleDateString()}</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <Target className="w-3 h-3" />
-                            <span>{detection.annotations.length} annotations</span>
+                            <span>{detection.annotations?.length || 0} annotations</span>
                           </div>
                         </div>
 
@@ -314,7 +346,8 @@ export default function DetectionsPage() {
                       </div>
                     </div>
                   )
-                })}
+                  })
+                )}
               </div>
             ) : (
               <div className="bg-gray-800 rounded-lg border border-gray-700">
@@ -350,7 +383,32 @@ export default function DetectionsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700">
-                      {mockDetections.map((detection) => {
+                      {loading ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
+                            <div className="flex items-center justify-center space-x-2">
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Loading detections...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : error ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-red-400">
+                            <div className="flex items-center justify-center space-x-2">
+                              <AlertTriangle className="w-4 h-4" />
+                              <span>{error}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : detections.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
+                            No detections found
+                          </td>
+                        </tr>
+                      ) : (
+                        detections.map((detection) => {
                         const statusInfo = statusConfig[detection.status as keyof typeof statusConfig]
                         const StatusIcon = statusInfo.icon
                         const confidenceLevel = getConfidenceLevel(detection.confidence)
@@ -364,18 +422,18 @@ export default function DetectionsPage() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                               <div className="flex items-center space-x-1">
                                 <MapPin className="w-3 h-3" />
-                                <span>{detection.ra.toFixed(3)}°, {detection.dec.toFixed(3)}°</span>
+                                <span>{detection.ra?.toFixed(3)}°, {detection.dec?.toFixed(3)}°</span>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                               <div className="flex items-center space-x-1">
                                 <Star className="w-3 h-3 text-yellow-500" />
-                                <span>{detection.magnitude}</span>
+                                <span>{detection.magnitude || 'N/A'}</span>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                               <span className={`font-medium ${confidenceColor}`}>
-                                {(detection.confidence * 100).toFixed(0)}%
+                                {((detection.confidence || 0) * 100).toFixed(0)}%
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -399,7 +457,8 @@ export default function DetectionsPage() {
                             </td>
                           </tr>
                         )
-                      })}
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>

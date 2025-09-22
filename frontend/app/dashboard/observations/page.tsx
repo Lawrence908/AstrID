@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Eye,
   Filter,
@@ -17,46 +17,7 @@ import {
   Clock,
   BarChart3
 } from 'lucide-react'
-
-// MOCK DATA for demonstration - All data below is simulated
-const mockObservations = [
-  {
-    id: 'obs-001',
-    survey: 'ZTF',
-    ra: 123.456,
-    dec: 45.678,
-    filter: 'r',
-    exposureTime: 30,
-    status: 'processed',
-    quality: 0.95,
-    timestamp: '2025-01-15T10:30:00Z',
-    processingTime: 45
-  },
-  {
-    id: 'obs-002',
-    survey: 'ATLAS',
-    ra: 234.567,
-    dec: 56.789,
-    filter: 'g',
-    exposureTime: 60,
-    status: 'processing',
-    quality: null,
-    timestamp: '2025-01-15T11:15:00Z',
-    processingTime: null
-  },
-  {
-    id: 'obs-003',
-    survey: 'ZTF',
-    ra: 345.678,
-    dec: 67.890,
-    filter: 'i',
-    exposureTime: 45,
-    status: 'failed',
-    quality: null,
-    timestamp: '2025-01-15T12:00:00Z',
-    processingTime: null
-  }
-]
+import { dashboardApi, ObservationStats } from '@/lib/api/dashboard'
 
 const statusConfig = {
   processed: { color: 'text-green-500', bg: 'bg-green-900', icon: CheckCircle, label: 'Processed' },
@@ -73,9 +34,41 @@ export default function ObservationsPage() {
     filter: '',
     dateRange: ''
   })
+  const [observations, setObservations] = useState<any[]>([])
+  const [stats, setStats] = useState<ObservationStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const [statsData, observationsData] = await Promise.all([
+        dashboardApi.getObservationStats(),
+        dashboardApi.getObservations(filters)
+      ])
+      
+      setStats(statsData)
+      setObservations(observationsData)
+    } catch (err) {
+      console.error('Failed to fetch observations data:', err)
+      setError('Failed to load observations data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [filters])
+
+  const handleRefresh = () => {
+    fetchData()
   }
 
   return (
@@ -93,9 +86,13 @@ export default function ObservationsPage() {
                 <Upload className="w-4 h-4 mr-2" />
                 Upload FITS
               </button>
-              <button className="flex items-center px-4 py-2 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
+              <button 
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center px-4 py-2 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
           </div>
@@ -107,8 +104,12 @@ export default function ObservationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Total Observations</p>
-                <p className="text-2xl font-bold text-white">1,247</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-white">
+                  {loading ? '—' : stats?.total_observations?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Eye className="w-8 h-8 text-astrid-blue" />
             </div>
@@ -117,8 +118,12 @@ export default function ObservationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Processed</p>
-                <p className="text-2xl font-bold text-green-500">1,156</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-green-500">
+                  {loading ? '—' : stats?.processed?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
@@ -127,8 +132,12 @@ export default function ObservationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Processing</p>
-                <p className="text-2xl font-bold text-yellow-500">23</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-yellow-500">
+                  {loading ? '—' : stats?.processing?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Clock className="w-8 h-8 text-yellow-500" />
             </div>
@@ -137,8 +146,12 @@ export default function ObservationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Failed</p>
-                <p className="text-2xl font-bold text-red-500">68</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-red-500">
+                  {loading ? '—' : stats?.failed?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
@@ -245,59 +258,85 @@ export default function ObservationsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {mockObservations.map((obs) => {
-                      const statusInfo = statusConfig[obs.status as keyof typeof statusConfig]
-                      const StatusIcon = statusInfo.icon
+                    {loading ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
+                          <div className="flex items-center justify-center space-x-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Loading observations...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : error ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-8 text-center text-red-400">
+                          <div className="flex items-center justify-center space-x-2">
+                            <AlertCircle className="w-4 h-4" />
+                            <span>{error}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : observations.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
+                          No observations found
+                        </td>
+                      </tr>
+                    ) : (
+                      observations.map((obs) => {
+                        const statusInfo = statusConfig[obs.status as keyof typeof statusConfig]
+                        const StatusIcon = statusInfo.icon
 
-                      return (
-                        <tr key={obs.id} className="hover:bg-gray-700 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                            {obs.id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            {obs.survey}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            <div className="flex items-center space-x-1">
-                              <MapPin className="w-3 h-3" />
-                              <span>{obs.ra.toFixed(3)}°, {obs.dec.toFixed(3)}°</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            <span className="px-2 py-1 bg-gray-700 rounded text-xs">{obs.filter}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
-                              <StatusIcon className="w-3 h-3 mr-1" />
-                              {statusInfo.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            {obs.quality ? (
+                        return (
+                          <tr key={obs.id} className="hover:bg-gray-700 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                              {obs.id}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {obs.survey}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                               <div className="flex items-center space-x-1">
-                                <Star className="w-3 h-3 text-yellow-500" />
-                                <span>{(obs.quality * 100).toFixed(1)}%</span>
+                                <MapPin className="w-3 h-3" />
+                                <span>{obs.ra?.toFixed(3)}°, {obs.dec?.toFixed(3)}°</span>
                               </div>
-                            ) : (
-                              <span className="text-gray-500">-</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => setSelectedObservation(obs.id)}
-                                className="text-astrid-blue hover:text-blue-400 transition-colors"
-                              >
-                                <EyeIcon className="w-4 h-4" />
-                              </button>
-                              <button className="text-gray-400 hover:text-white transition-colors">
-                                <Download className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              <span className="px-2 py-1 bg-gray-700 rounded text-xs">{obs.filter_band || obs.filter}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                                <StatusIcon className="w-3 h-3 mr-1" />
+                                {statusInfo.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {obs.quality ? (
+                                <div className="flex items-center space-x-1">
+                                  <Star className="w-3 h-3 text-yellow-500" />
+                                  <span>{(obs.quality * 100).toFixed(1)}%</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => setSelectedObservation(obs.id)}
+                                  className="text-astrid-blue hover:text-blue-400 transition-colors"
+                                >
+                                  <EyeIcon className="w-4 h-4" />
+                                </button>
+                                <button className="text-gray-400 hover:text-white transition-colors">
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>

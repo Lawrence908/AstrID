@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Workflow,
   Play,
@@ -17,87 +17,7 @@ import {
   Activity,
   Zap
 } from 'lucide-react'
-
-// MOCK DATA for demonstration - All data below is simulated
-const mockWorkflows = [
-  {
-    id: 'wf-001',
-    name: 'Observation Processing Pipeline',
-    status: 'running',
-    progress: 75,
-    startTime: '2025-01-15T10:00:00Z',
-    duration: '2h 15m',
-    tasks: {
-      total: 8,
-      completed: 6,
-      failed: 0,
-      pending: 2
-    },
-    resources: {
-      cpu: 45,
-      memory: 67,
-      storage: 23
-    }
-  },
-  {
-    id: 'wf-002',
-    name: 'Detection Analysis Workflow',
-    status: 'completed',
-    progress: 100,
-    startTime: '2025-01-15T08:30:00Z',
-    duration: '1h 45m',
-    tasks: {
-      total: 5,
-      completed: 5,
-      failed: 0,
-      pending: 0
-    },
-    resources: {
-      cpu: 0,
-      memory: 0,
-      storage: 0
-    }
-  },
-  {
-    id: 'wf-003',
-    name: 'Data Export Pipeline',
-    status: 'failed',
-    progress: 30,
-    startTime: '2025-01-15T12:00:00Z',
-    duration: '45m',
-    tasks: {
-      total: 4,
-      completed: 1,
-      failed: 1,
-      pending: 2
-    },
-    resources: {
-      cpu: 0,
-      memory: 0,
-      storage: 0
-    },
-    error: 'Storage quota exceeded'
-  },
-  {
-    id: 'wf-004',
-    name: 'Model Training Job',
-    status: 'pending',
-    progress: 0,
-    startTime: null,
-    duration: null,
-    tasks: {
-      total: 12,
-      completed: 0,
-      failed: 0,
-      pending: 12
-    },
-    resources: {
-      cpu: 0,
-      memory: 0,
-      storage: 0
-    }
-  }
-]
+import { dashboardApi, WorkflowStats } from '@/lib/api/dashboard'
 
 const statusConfig = {
   running: { color: 'text-blue-500', bg: 'bg-blue-900', icon: Play, label: 'Running' },
@@ -114,6 +34,10 @@ export default function WorkflowsPage() {
     type: '',
     dateRange: ''
   })
+  const [workflows, setWorkflows] = useState<any[]>([])
+  const [stats, setStats] = useState<WorkflowStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -122,6 +46,34 @@ export default function WorkflowsPage() {
   const handleWorkflowAction = (workflowId: string, action: string) => {
     console.log(`Action ${action} on workflow ${workflowId}`)
     // In a real app, this would trigger the actual workflow action
+  }
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const [statsData, workflowsData] = await Promise.all([
+        dashboardApi.getWorkflowStats(),
+        dashboardApi.getWorkflows(filters)
+      ])
+      
+      setStats(statsData)
+      setWorkflows(workflowsData)
+    } catch (err) {
+      console.error('Failed to fetch workflows data:', err)
+      setError('Failed to load workflows data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [filters])
+
+  const handleRefresh = () => {
+    fetchData()
   }
 
   return (
@@ -139,9 +91,13 @@ export default function WorkflowsPage() {
                 <Workflow className="w-4 h-4 mr-2" />
                 New Workflow
               </button>
-              <button className="flex items-center px-4 py-2 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
+              <button 
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center px-4 py-2 bg-gray-800 text-gray-200 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
           </div>
@@ -153,8 +109,12 @@ export default function WorkflowsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Total Workflows</p>
-                <p className="text-2xl font-bold text-white">24</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-white">
+                  {loading ? '—' : stats?.total_workflows?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Workflow className="w-8 h-8 text-astrid-blue" />
             </div>
@@ -163,8 +123,12 @@ export default function WorkflowsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Running</p>
-                <p className="text-2xl font-bold text-blue-500">3</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-blue-500">
+                  {loading ? '—' : stats?.running?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <Play className="w-8 h-8 text-blue-500" />
             </div>
@@ -173,8 +137,12 @@ export default function WorkflowsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Completed</p>
-                <p className="text-2xl font-bold text-green-500">18</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-green-500">
+                  {loading ? '—' : stats?.completed?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
@@ -183,8 +151,12 @@ export default function WorkflowsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Failed</p>
-                <p className="text-2xl font-bold text-red-500">3</p>
-                <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+                <p className="text-2xl font-bold text-red-500">
+                  {loading ? '—' : stats?.failed?.toLocaleString() || '0'}
+                </p>
+                {!loading && stats && (
+                  <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
+                )}
               </div>
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
@@ -260,7 +232,26 @@ export default function WorkflowsPage() {
               </div>
 
               <div className="divide-y divide-gray-700">
-                {mockWorkflows.map((workflow) => {
+                {loading ? (
+                  <div className="p-8 text-center text-gray-400">
+                    <div className="flex items-center justify-center space-x-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Loading workflows...</span>
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="p-8 text-center text-red-400">
+                    <div className="flex items-center justify-center space-x-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>{error}</span>
+                    </div>
+                  </div>
+                ) : workflows.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400">
+                    No workflows found
+                  </div>
+                ) : (
+                  workflows.map((workflow) => {
                   const statusInfo = statusConfig[workflow.status as keyof typeof statusConfig]
                   const StatusIcon = statusInfo.icon
 
@@ -283,18 +274,18 @@ export default function WorkflowsPage() {
                                 <div className="flex-1 bg-gray-700 rounded-full h-2">
                                   <div
                                     className="bg-astrid-blue h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${workflow.progress}%` }}
+                                    style={{ width: `${workflow.progress || 0}%` }}
                                   ></div>
                                 </div>
-                                <span className="text-sm text-white">{workflow.progress}%</span>
+                                <span className="text-sm text-white">{workflow.progress || 0}%</span>
                               </div>
                             </div>
 
                             <div>
                               <p className="text-sm text-gray-400">Tasks</p>
                               <p className="text-sm text-white">
-                                {workflow.tasks.completed}/{workflow.tasks.total} completed
-                                {workflow.tasks.failed > 0 && (
+                                {workflow.tasks?.completed || 0}/{workflow.tasks?.total || 0} completed
+                                {(workflow.tasks?.failed || 0) > 0 && (
                                   <span className="text-red-500 ml-1">({workflow.tasks.failed} failed)</span>
                                 )}
                               </p>
@@ -310,15 +301,15 @@ export default function WorkflowsPage() {
                             <div className="grid grid-cols-3 gap-4 mb-4">
                               <div>
                                 <p className="text-sm text-gray-400">CPU Usage</p>
-                                <p className="text-sm text-white">{workflow.resources.cpu}%</p>
+                                <p className="text-sm text-white">{workflow.resources?.cpu || 0}%</p>
                               </div>
                               <div>
                                 <p className="text-sm text-gray-400">Memory</p>
-                                <p className="text-sm text-white">{workflow.resources.memory}%</p>
+                                <p className="text-sm text-white">{workflow.resources?.memory || 0}%</p>
                               </div>
                               <div>
                                 <p className="text-sm text-gray-400">Storage</p>
-                                <p className="text-sm text-white">{workflow.resources.storage}%</p>
+                                <p className="text-sm text-white">{workflow.resources?.storage || 0}%</p>
                               </div>
                             </div>
                           )}
@@ -399,7 +390,8 @@ export default function WorkflowsPage() {
                       </div>
                     </div>
                   )
-                })}
+                  })
+                )}
               </div>
             </div>
           </div>

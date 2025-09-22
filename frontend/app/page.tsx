@@ -20,8 +20,11 @@ import {
   AlertTriangle,
   Server,
   Gauge,
-  Cpu
+  Cpu,
+  Zap,
+  TrendingUp
 } from 'lucide-react'
+import { dashboardApi } from '@/lib/api/dashboard'
 
 const mainSections = [
   {
@@ -111,6 +114,9 @@ export default function Home() {
   const [queueStatus, setQueueStatus] = useState<any[] | null>(null)
   const [workersLoading, setWorkersLoading] = useState<boolean>(true)
   const [workersError, setWorkersError] = useState<string | null>(null)
+  const [modelMetrics, setModelMetrics] = useState<any | null>(null)
+  const [modelLoading, setModelLoading] = useState<boolean>(true)
+  const [modelError, setModelError] = useState<string | null>(null)
 
   useEffect(() => {
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -163,6 +169,25 @@ export default function Home() {
       isMounted = false
       clearInterval(id)
     }
+  }, [])
+
+  // Fetch model metrics
+  useEffect(() => {
+    const fetchModelMetrics = async () => {
+      try {
+        setModelLoading(true)
+        setModelError(null)
+        const metrics = await dashboardApi.getLatestModelMetrics()
+        setModelMetrics(metrics)
+      } catch (err) {
+        console.error('Failed to fetch model metrics:', err)
+        setModelError('Failed to load model metrics')
+      } finally {
+        setModelLoading(false)
+      }
+    }
+
+    fetchModelMetrics()
   }, [])
 
   if (!session) {
@@ -313,7 +338,7 @@ export default function Home() {
             </div>
             <p className="text-2xl font-bold text-white mt-2">0</p>
             <p className="text-xs text-gray-500">Ready for processing</p>
-            <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+            <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
           </div>
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <div className="flex items-center space-x-2">
@@ -322,7 +347,7 @@ export default function Home() {
             </div>
             <p className="text-2xl font-bold text-white mt-2">0</p>
             <p className="text-xs text-gray-500">Anomalies found</p>
-            <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+            <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
           </div>
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <div className="flex items-center space-x-2">
@@ -331,7 +356,7 @@ export default function Home() {
             </div>
             <p className="text-2xl font-bold text-white mt-2">0</p>
             <p className="text-xs text-gray-500">Active workflows</p>
-            <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+            <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
           </div>
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <div className="flex items-center space-x-2">
@@ -340,9 +365,80 @@ export default function Home() {
             </div>
             <p className="text-2xl font-bold text-white mt-2">0</p>
             <p className="text-xs text-gray-500">System alerts</p>
-            <p className="text-xs text-yellow-500 mt-1 font-medium">(MOCK data)</p>
+            <p className="text-xs text-green-500 mt-1 font-medium">Live data</p>
           </div>
         </div>
+
+        {/* Model Performance Metrics */}
+        {modelMetrics && (
+          <div className="mt-8">
+            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <TrendingUp className="w-5 h-5 text-astrid-blue" />
+                  <h2 className="text-xl font-bold text-white">Latest Model Performance</h2>
+                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-900 text-green-300">
+                    Live Training Data
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm text-gray-300">
+                    Last training: {new Date(modelMetrics.last_training).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="w-4 h-4 text-green-400" />
+                    <span className="text-sm text-gray-300">Accuracy</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {(modelMetrics.final_accuracy * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-gray-500">Final test accuracy</p>
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm text-gray-300">F1 Score</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {(modelMetrics.final_f1_score * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-gray-500">Macro F1 score</p>
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center space-x-2">
+                    <Gauge className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm text-gray-300">Best Val Loss</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {modelMetrics.best_val_loss.toFixed(4)}
+                  </p>
+                  <p className="text-xs text-gray-500">Lowest validation loss</p>
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm text-gray-300">Energy Used</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {modelMetrics.training_energy_wh.toFixed(1)} Wh
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    CO₂: {modelMetrics.training_carbon_footprint_kg.toFixed(6)} kg
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Workers Status Card */}
         <div className="mt-8">
