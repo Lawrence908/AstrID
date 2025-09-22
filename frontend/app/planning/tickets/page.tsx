@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, GitBranch, ExternalLink, Calendar, User, Clock, CheckCircle, Circle, AlertCircle, Filter, Search, FileText } from 'lucide-react'
+import { ArrowLeft, GitBranch, ExternalLink, Calendar, User, Clock, CheckCircle, Circle, AlertCircle, Filter, Search, FileText, Globe, List } from 'lucide-react'
 import DocumentationViewer from '@/components/DocumentationViewer'
 
 const tickets = [
@@ -615,25 +615,29 @@ const tickets = [
 ]
 
 const statuses = ['All', 'todo', 'in-progress', 'completed']
-const priorities = ['All', 'P1', 'P2', 'P3']
-const labels = ['All', 'infrastructure', 'high-priority', 'core-domain', 'image-processing', 'preprocessing', 'ml', 'deep-learning', 'detection', 'pipeline', 'mlflow', 'experiment-tracking', 'workflow', 'orchestration', 'dramatiq', 'database']
+const priorities = ['All', 'P1', 'P2', 'P3', 'P4']
+const projects = ['All', 'ASTRID-INFRA', 'ASTRID-CORE', 'ASTRID-API', 'ASTRID-ML', 'ASTRID-WORK', 'ASTRID-TEST', 'ASTRID-DEPLOY', 'ASTRID-DOCS']
+const labels = ['All', 'infrastructure', 'high-priority', 'core-domain', 'image-processing', 'preprocessing', 'ml', 'deep-learning', 'detection', 'pipeline', 'mlflow', 'experiment-tracking', 'workflow', 'orchestration', 'dramatiq', 'database', 'integration', 'data-processing', 'algorithm', 'model-integration', 'ui', 'frontend', 'api', 'testing', 'quality', 'deployment', 'docker', 'production', 'ci-cd', 'documentation', 'training', 'mlops', 'monitoring', 'improvement', 'metrics', 'stability', 'ops', 'notebook', 'scheduler', 'automation', 'notifications', 'email', 'timeline', 'visualization', '3d', 'stretch-goal', 'curation', 'expert-review', 'backup', 'disaster-recovery', 'data-pipeline', 'security']
 
 export default function TicketsPage() {
   const [selectedTicket, setSelectedTicket] = useState(tickets[0])
   const [statusFilter, setStatusFilter] = useState('All')
   const [priorityFilter, setPriorityFilter] = useState('All')
+  const [projectFilter, setProjectFilter] = useState('All')
   const [labelFilter, setLabelFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullList, setShowFullList] = useState(false)
+  const [view, setView] = useState<'linear' | 'local'>('linear')
 
   const filteredTickets = tickets.filter(ticket => {
     const matchesStatus = statusFilter === 'All' || ticket.status === statusFilter
     const matchesPriority = priorityFilter === 'All' || ticket.priority === priorityFilter
+    const matchesProject = projectFilter === 'All' || ticket.project === projectFilter
     const matchesLabel = labelFilter === 'All' || ticket.labels.includes(labelFilter)
     const matchesSearch = ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          ticket.id.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesStatus && matchesPriority && matchesLabel && matchesSearch
+    return matchesStatus && matchesPriority && matchesProject && matchesLabel && matchesSearch
   })
 
   const getStatusIcon = (status: string) => {
@@ -701,23 +705,83 @@ export default function TicketsPage() {
                 Project tickets and progress tracking
               </p>
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <a
+                href="https://linear.app/astrid-astro-ident/team/ASTR/all"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-astrid-blue hover:text-blue-400 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Open in Linear
+              </a>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
+                <button
+                  onClick={() => setView('linear')}
+                  className={`inline-flex items-center px-3 py-1 text-sm rounded-md ${view === 'linear' ? 'bg-astrid-blue text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Linear View"
+                >
+                  <Globe className="w-4 h-4 mr-2" /> Linear
+                </button>
+                <button
+                  onClick={() => setView('local')}
+                  className={`inline-flex items-center px-3 py-1 text-sm rounded-md ${view === 'local' ? 'bg-astrid-blue text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Local View"
+                >
+                  <List className="w-4 h-4 mr-2" /> Local
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-300">8 tickets total</span>
+              <span className="text-sm text-gray-300">{tickets.length} tickets total</span>
             </div>
             <div className="flex items-center space-x-2">
               <Calendar className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">Last updated: Sep 21, 2025</span>
+              <span className="text-sm text-gray-300">Last updated: Sep 29, 2025</span>
             </div>
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-4 h-4 text-green-400" />
-              <span className="text-sm text-gray-300">8 completed (100%)</span>
+              <span className="text-sm text-gray-300">
+                {tickets.filter(t => t.status === 'completed').length} completed ({Math.round((tickets.filter(t => t.status === 'completed').length / tickets.length) * 100)}%)
+              </span>
             </div>
           </div>
         </div>
 
+        {view === 'linear' ? (
+          <div className="rounded-lg border border-gray-700 overflow-hidden">
+            <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-gray-300 text-sm">
+                <Globe className="w-4 h-4" />
+                <span>Embedded Linear workspace</span>
+              </div>
+              <a
+                href="https://linear.app/astrid-astro-ident/team/ASTR/all"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-3 py-1 text-xs font-medium text-astrid-blue hover:text-blue-400 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Open in new tab
+              </a>
+            </div>
+            <div className="bg-gray-900">
+              <iframe
+                src="https://linear.app/astrid-astro-ident/team/ASTR/all"
+                className="w-full h-[calc(100vh-14rem)] bg-white"
+                title="Linear Tickets"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 text-xs text-gray-400">
+              If the view does not load, Linear may block embedding. Use the
+              <a href="https://linear.app/astrid-astro-ident/team/ASTR/all" target="_blank" rel="noopener noreferrer" className="text-astrid-blue hover:text-blue-400 ml-1">direct link</a>.
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Sidebar - Ticket List */}
           <div className="lg:col-span-1">
@@ -781,6 +845,25 @@ export default function TicketsPage() {
                           }`}
                         >
                           {priority === 'All' ? 'All' : priority}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Project</label>
+                    <div className="flex flex-wrap gap-2">
+                      {projects.map((project) => (
+                        <button
+                          key={project}
+                          onClick={() => setProjectFilter(project)}
+                          className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                            projectFilter === project
+                              ? 'bg-astrid-blue text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {project === 'All' ? 'All' : project.replace('ASTRID-', '')}
                         </button>
                       ))}
                     </div>
@@ -872,6 +955,13 @@ export default function TicketsPage() {
                     </div>
                   </div>
                   <div>
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">Project</h4>
+                    <div className="flex items-center space-x-2">
+                      <GitBranch className="w-4 h-4 text-gray-400" />
+                      <span className="text-white">{selectedTicket.project}</span>
+                    </div>
+                  </div>
+                  <div>
                     <h4 className="text-sm font-medium text-gray-300 mb-2">Progress</h4>
                     <div className="flex items-center space-x-2">
                       <div className="flex-1 bg-gray-700 rounded-full h-2">
@@ -916,6 +1006,7 @@ export default function TicketsPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Full List Modal */}
@@ -934,7 +1025,7 @@ export default function TicketsPage() {
             </div>
             <div className="flex-1 p-4">
               <div className="bg-gray-900 rounded-lg p-6 max-w-6xl mx-auto">
-                <DocumentationViewer file="/docs/linear-tickets.md" />
+                <DocumentationViewer file="/docs/tickets/linear-tickets.md" />
               </div>
             </div>
           </div>

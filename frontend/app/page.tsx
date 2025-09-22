@@ -102,7 +102,7 @@ const planningSections = [
     id: 'tickets',
     title: 'Linear Tickets',
     icon: <GitBranch className="w-5 h-5" />,
-    href: '/planning/tickets',
+    href: 'https://linear.app/astrid-astro-ident/team/ASTR/all',
     description: 'Project tickets and progress tracking'
   }
 ]
@@ -308,26 +308,39 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {planningSections.map((section) => (
-              <Link
-                key={section.id}
-                href={section.href}
-                className="group bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="text-astrid-blue group-hover:text-blue-400 transition-colors">
-                    {section.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-white group-hover:text-blue-100 transition-colors">
-                      {section.title}
-                    </h3>
-                    <p className="text-sm text-gray-400">{section.description}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {planningSections.map((section) => {
+              const isExternal = typeof section.href === 'string' && section.href.startsWith('http')
+              const content = (
+                <div className="group bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition-colors">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-astrid-blue group-hover:text-blue-400 transition-colors">
+                      {section.icon}
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-white group-hover:text-blue-100 transition-colors">
+                        {section.title}
+                      </h3>
+                      <p className="text-sm text-gray-400">{section.description}</p>
+                    </div>
                   </div>
                 </div>
-              </Link>
-            ))}
+              )
+              return isExternal ? (
+                <a
+                  key={section.id}
+                  href={section.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {content}
+                </a>
+              ) : (
+                <Link key={section.id} href={section.href}>
+                  {content}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

@@ -246,9 +246,9 @@ export default function DiagramsPage() {
 
       {/* Fullscreen Modal */}
       {isFullscreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-          <div className="relative w-full h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 overflow-y-auto">
+          <div className="min-h-full flex flex-col">
+            <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
               <h2 className="text-xl font-bold text-white">{selectedDiagram.name}</h2>
               <button
                 onClick={handleCloseFullscreen}
@@ -258,8 +258,8 @@ export default function DiagramsPage() {
                 Exit Fullscreen
               </button>
             </div>
-            <div className="flex-1 p-4 overflow-auto">
-              <div className="bg-gray-900 rounded-lg p-4 h-full">
+            <div className="flex-1 p-4">
+              <div className="bg-gray-900 rounded-lg p-6 max-w-6xl mx-auto">
                 <DiagramViewer file={selectedDiagram.file} />
               </div>
             </div>

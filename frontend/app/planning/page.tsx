@@ -39,40 +39,7 @@ const planningSections = [
   }
 ]
 
-const recentActivity = [
-  {
-    id: 1,
-    type: 'diagram',
-    title: 'Updated System Architecture diagram',
-    description: 'Added new microservices and updated data flow',
-    timestamp: '2 hours ago',
-    icon: <Image className="w-4 h-4" />
-  },
-  {
-    id: 2,
-    type: 'documentation',
-    title: 'Updated Development Guide',
-    description: 'Added new setup instructions for Docker environment',
-    timestamp: '4 hours ago',
-    icon: <FileText className="w-4 h-4" />
-  },
-  {
-    id: 3,
-    type: 'ticket',
-    title: 'Completed AST-001: Data ingestion pipeline',
-    description: 'Successfully implemented FITS file processing',
-    timestamp: '1 day ago',
-    icon: <CheckCircle className="w-4 h-4" />
-  },
-  {
-    id: 4,
-    type: 'ticket',
-    title: 'In Progress: AST-002: Anomaly detection algorithm',
-    description: '75% complete - implementing ML model training',
-    timestamp: '2 days ago',
-    icon: <Clock className="w-4 h-4" />
-  }
-]
+// Recent Activity removed until a real data source is wired
 
 export default function PlanningPage() {
   return (
@@ -160,33 +127,7 @@ export default function PlanningPage() {
           ))}
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Recent Activity</h2>
-            <Link
-              href="/planning/activity"
-              className="text-sm text-astrid-blue hover:text-blue-400 transition-colors"
-            >
-              View all activity
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-4 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors">
-                <div className="flex-shrink-0 mt-1 text-astrid-blue">
-                  {activity.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-white">{activity.title}</h3>
-                  <p className="text-sm text-gray-400 mt-1">{activity.description}</p>
-                  <p className="text-xs text-gray-500 mt-2">{activity.timestamp}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Recent Activity intentionally omitted until connected to live data */}
 
         {/* Quick Stats */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">

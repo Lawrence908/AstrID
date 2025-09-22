@@ -45,7 +45,7 @@ const documents = [
   {
     id: 'linear-tickets',
     name: 'Linear Tickets',
-    file: '/docs/linear-tickets.md',
+    file: '/docs/tickets/linear-tickets.md',
     description: 'Project management and ticket tracking documentation',
     category: 'Project',
     lastUpdated: '2025-09-21',
@@ -63,9 +63,9 @@ const documents = [
   {
     id: 'migration-strategy',
     name: 'Migration Strategy',
-    file: '/docs/migration-strategy.md',
-    description: 'Data migration and system upgrade procedures',
-    category: 'Operations',
+    file: '/docs/development.md',
+    description: 'Renamed placeholder: see Development Guide for migration notes',
+    category: 'Development',
     lastUpdated: '2025-09-21',
     icon: <Settings className="w-4 h-4" />
   },
@@ -270,9 +270,9 @@ export default function DocumentationPage() {
 
       {/* Fullscreen Modal */}
       {isFullscreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-          <div className="relative w-full h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 overflow-y-auto">
+          <div className="min-h-full flex flex-col">
+            <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
               <h2 className="text-xl font-bold text-white">{selectedDocument.name}</h2>
               <button
                 onClick={handleCloseFullscreen}
@@ -282,8 +282,8 @@ export default function DocumentationPage() {
                 Exit Fullscreen
               </button>
             </div>
-            <div className="flex-1 p-4 overflow-auto">
-              <div className="bg-gray-900 rounded-lg p-4 h-full">
+            <div className="flex-1 p-4">
+              <div className="bg-gray-900 rounded-lg p-6 max-w-6xl mx-auto">
                 <DocumentationViewer file={selectedDocument.file} />
               </div>
             </div>
