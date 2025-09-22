@@ -5,6 +5,11 @@ from src.domains.catalog.models import AuditLog, ProcessingJob, SystemConfig
 from src.domains.curation.models import Alert, ValidationEvent
 from src.domains.detection.models import Detection, Model, ModelRun
 from src.domains.differencing.models import Candidate, DifferenceRun
+from src.domains.ml.training_data.models import (
+    TrainingDataset,
+    TrainingRun,
+    TrainingSample,
+)
 from src.domains.observations.models import Observation, Survey
 from src.domains.preprocessing.models import PreprocessRun
 
@@ -32,4 +37,8 @@ __all__ = [
     "ProcessingJob",
     "AuditLog",
     # Legacy models removed after migration
+    # ML Training Data domain
+    "TrainingDataset",
+    "TrainingSample",
+    "TrainingRun",
 ]

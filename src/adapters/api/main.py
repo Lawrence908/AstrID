@@ -5,17 +5,17 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC
 
+import redis.asyncio as redis
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import redis.asyncio as redis
 
+from src.adapters.api.docs import create_openapi_schema
+from src.adapters.api.rate_limiting import RATE_LIMITS, RateLimitingMiddleware
 from src.adapters.api.routes import auth, health, mlflow, storage, stream
 from src.adapters.api.routes.workers import router as workers_router
-from src.adapters.api.docs import create_openapi_schema
 from src.adapters.api.versioning import APIVersioningMiddleware
-from src.adapters.api.rate_limiting import RateLimitingMiddleware, RATE_LIMITS
 from src.core.api.response_wrapper import create_response
 from src.core.constants import (
     API_DESCRIPTION,
@@ -33,6 +33,7 @@ from src.domains.catalog.api.routes import router as catalog_router
 from src.domains.curation.api.routes import router as curation_router
 from src.domains.detection.api.routes import router as detections_router
 from src.domains.differencing.api.routes import router as differencing_router
+from src.domains.ml.training_data.api import router as training_router
 from src.domains.observations.api.routes import router as observations_router
 from src.domains.preprocessing.api.routes import router as preprocessing_router
 from src.infrastructure.workflow.api import router as workflow_router
@@ -51,11 +52,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize Redis connection for rate limiting
         redis_client = redis.from_url(REDIS_URL)
         app.state.redis_client = redis_client
-        
+
         # Test Redis connection
         await redis_client.ping()
         logger.info("Redis connection established for rate limiting")
-        
+
         logger.info("AstrID API startup completed successfully")
     except Exception as e:
         logger.error(f"Failed to start AstrID API: {str(e)}")
@@ -67,10 +68,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutting down AstrID API...")
     try:
         # Close Redis connection
-        if hasattr(app.state, 'redis_client'):
+        if hasattr(app.state, "redis_client"):
             await app.state.redis_client.close()
             logger.info("Redis connection closed")
-        
+
         logger.info("AstrID API shutdown completed successfully")
     except Exception as e:
         logger.error(f"Error during AstrID API shutdown: {str(e)}")
@@ -93,20 +94,14 @@ app = FastAPI(
         "requestSnippetsEnabled": True,
         "requestSnippets": {
             "generators": {
-                "curl_bash": {
-                    "title": "cURL (bash)",
-                    "syntax": "bash"
-                },
+                "curl_bash": {"title": "cURL (bash)", "syntax": "bash"},
                 "curl_powershell": {
                     "title": "cURL (PowerShell)",
-                    "syntax": "powershell"
+                    "syntax": "powershell",
                 },
-                "curl_cmd": {
-                    "title": "cURL (CMD)",
-                    "syntax": "bash"
-                }
+                "curl_cmd": {"title": "cURL (CMD)", "syntax": "bash"},
             }
-        }
+        },
     },
 )
 
@@ -239,6 +234,7 @@ app.include_router(storage.router, prefix="/storage", tags=["storage"])
 app.include_router(mlflow.router, tags=["mlflow"])
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(workers_router, prefix="/workers", tags=["workers"])
+app.include_router(training_router, tags=["training"])
 
 
 @app.get("/")  # type: ignore[misc]
