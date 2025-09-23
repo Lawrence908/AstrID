@@ -94,6 +94,7 @@ try:
                 "application_name": "astrid_app",
                 "client_encoding": "utf8",
                 "timezone": "UTC",
+                "search_path": "public",
             },
         },
     )

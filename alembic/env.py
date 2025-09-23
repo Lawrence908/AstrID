@@ -77,8 +77,12 @@ target_metadata = Base.metadata
 
 # Debug print to see what tables are registered
 print("Registered tables in metadata:")
-for table in Base.metadata.sorted_tables:
-    print(f"- {table.name} (schema: {table.schema})")
+try:
+    for table in Base.metadata.sorted_tables:
+        print(f"- {table.name} (schema: {table.schema})")
+except Exception as e:
+    print(f"Error listing tables: {e}")
+    # Continue without the debug print
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
