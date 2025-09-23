@@ -204,8 +204,16 @@ class TrainingManager:
                     break
 
                 logger.info(
-                    f"Epoch {epoch+1} completed - Train Loss: {train_metrics['loss']:.4f}, "
-                    f"Val Loss: {val_metrics['loss']:.4f}, Val Accuracy: {val_metrics.get('accuracy', 0.0):.4f}"
+                    f"Epoch {epoch+1} completed - "
+                    f"Train Loss: {train_metrics['loss']:.4f}, "
+                    f"Val Loss: {val_metrics['loss']:.4f}, "
+                    f"Val Acc: {val_metrics.get('accuracy', 0.0):.4f}, "
+                    f"Val F1: {val_metrics.get('f1_macro', 0.0):.4f}, "
+                    f"Energy: {val_metrics.get('training_energy_wh', 0.0):.3f} Wh, "
+                    f"Avg Power: {val_metrics.get('training_avg_power_w', 0.0):.2f} W, "
+                    f"Peak Power: {val_metrics.get('training_peak_power_w', 0.0):.2f} W, "
+                    f"Duration: {val_metrics.get('training_duration_seconds', 0.0):.2f} s, "
+                    f"CO2: {val_metrics.get('training_carbon_footprint_kg', 0.0):.3f} kg"
                 )
 
         except Exception as e:
