@@ -15,6 +15,7 @@ from alembic import context
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Import your database models and configuration
+from src.adapters.auth.models import APIKey
 from src.core.constants import get_database_url
 from src.core.db.session import Base
 from src.domains.catalog.models import SystemConfig
@@ -67,6 +68,7 @@ _ = [
     TrainingRun,
     # Catalog domain
     SystemConfig,
+    APIKey,
 ]
 
 # add your model's MetaData object here
