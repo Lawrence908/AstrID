@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.adapters.auth.api_key_auth import require_permission_or_api_key
+from src.adapters.auth.rbac import Permission
 from src.core.api.response_wrapper import create_response
 from src.core.db.session import get_db
 from src.domains.ml.training_data.models import TrainingDataset, TrainingSample
@@ -33,7 +35,9 @@ class CollectionParams(BaseModel):
 
 @router.post("/datasets/collect")
 async def collect_training_data(
-    params: CollectionParams, db: AsyncSession = Depends(get_db)
+    params: CollectionParams,
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     r2 = R2StorageClient()
     collector = TrainingDataCollector(db, r2)
@@ -73,7 +77,10 @@ async def collect_training_data(
 
 
 @router.get("/datasets")
-async def list_training_datasets(db: AsyncSession = Depends(get_db)):
+async def list_training_datasets(
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
+):
     result = await db.execute(
         select(TrainingDataset).order_by(TrainingDataset.created_at.desc())
     )
@@ -94,7 +101,11 @@ async def list_training_datasets(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/datasets/{dataset_id}")
-async def get_training_dataset(dataset_id: str, db: AsyncSession = Depends(get_db)):
+async def get_training_dataset(
+    dataset_id: str,
+    db: AsyncSession = Depends(get_db),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
+):
     ds = await db.get(TrainingDataset, dataset_id)
     if not ds:
         return create_response({"error": {"message": "Not found"}}, status_code=404)

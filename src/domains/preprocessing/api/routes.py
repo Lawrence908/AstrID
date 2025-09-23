@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.adapters.auth.api_key_auth import require_permission_or_api_key
 from src.adapters.auth.rbac import (
     Permission,
     UserWithRole,
@@ -37,9 +38,7 @@ router = APIRouter()
 async def create_preprocess_run(
     run: preprocessing_schema.PreprocessRunCreate,
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Create a new preprocessing run."""
     service = PreprocessRunService(db)
@@ -114,9 +113,7 @@ async def run_preprocessing(
     observation_id: str = Query(..., description="Observation ID to process"),
     algorithm: str = Query("standard", description="Preprocessing algorithm to use"),
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     """Run preprocessing algorithm on an observation."""
     service = PreprocessRunService(db)
@@ -134,9 +131,7 @@ async def run_preprocessing(
 async def preprocess_observation(
     id: str,
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     service = PreprocessRunService(db)
     result = await service.run_preprocessing(id, algorithm="standard")
@@ -170,9 +165,7 @@ class CalibrationUpload(BaseModel):
 )
 async def upload_calibration_frames(
     payload: CalibrationUpload,
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     cp = CalibrationProcessor()
     result: dict = {}
@@ -223,9 +216,7 @@ async def get_quality_metrics(
 )
 async def configure_pipeline(
     config: dict,
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     # Placeholder acknowledgement
     return create_response({"configured": True, "config_keys": list(config.keys())})
@@ -271,9 +262,7 @@ async def process_image(
     observation_id: str,
     request: ProcessingRequest,
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Apply advanced image processing to an observation."""
     try:
@@ -371,9 +360,7 @@ async def get_processing_results(
 async def normalize_image(
     request: NormalizationRequest,
     observation_id: str = Query(..., description="Observation ID"),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Apply image normalization to an observation."""
     try:
@@ -413,9 +400,7 @@ async def normalize_image(
 async def scale_image(
     request: ScalingRequest,
     observation_id: str = Query(..., description="Observation ID"),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Apply image scaling to an observation."""
     try:
@@ -493,9 +478,7 @@ async def get_processing_metrics(
 )
 async def archive_processing_data(
     observation_id: str,
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Archive all processing data for an observation."""
     try:

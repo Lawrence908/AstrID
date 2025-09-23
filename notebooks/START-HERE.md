@@ -9,14 +9,15 @@ This note is the quick launcher for continuing the real-data training work. It c
 
 ### 10-minute bootstrap checklist (dev/staging)
 - Services up: api, worker, prefect, mlflow, redis
-  - Health: `http://localhost:8000/health`, MLflow UI: `http://localhost:5000`, Prefect: `http://localhost:4200`
+  - Health: `http://127.0.0.1:8000/health`, MLflow UI: `http://localhost:5000`, Prefect: `http://localhost:4200`
 - DB migrated (includes training tables from docs)
 - R2 and DB env vars set
+- **Authenticate with API** (required for RBAC)
 - Create/refresh a small dataset window via the API and capture `dataset_id`
 
 Example request to create a training dataset (ASTR-113):
 ```bash
-curl -X POST http://localhost:8000/training/datasets/collect \
+curl -X POST http://127.0.0.1:8000/training/datasets/collect \
   -H 'Content-Type: application/json' \
   -d '{
     "survey_ids": ["hst"],
@@ -29,9 +30,46 @@ curl -X POST http://localhost:8000/training/datasets/collect \
 ```
 List and inspect datasets:
 ```bash
-curl http://localhost:8000/training/datasets | jq
-curl http://localhost:8000/training/datasets/<dataset_id> | jq
+curl http://127.0.0.1:8000/training/datasets | jq
+curl http://127.0.0.1:8000/training/datasets/<dataset_id> | jq
 ```
+
+**Authentication Options:**
+
+Option 1: JWT Authentication (for human users):
+```python
+# Copy from notebooks/auth_template.py
+authenticate_user("your-email@example.com", "your-password")
+```
+
+Option 2: API Key Authentication (for automated workflows):
+```python
+# Copy from notebooks/auth_template.py
+authenticate_with_api_key("astrid_your_api_key_here")
+```
+
+Option 3: Create API Key (requires admin JWT auth first):
+```python
+# First authenticate as admin
+authenticate_user("admin@example.com", "password")
+# Then create API key
+api_key = create_api_key("prefect-workflows", "For Prefect automated workflows")
+```
+
+Option 4: Use the auth helper script:
+```bash
+python notebooks/auth_helper.py
+```
+
+**For any notebook that needs API access:**
+1. Copy the authentication code from `notebooks/auth_template.py`
+2. Choose your authentication method (JWT or API key)
+3. Use `AUTH_HEADERS` in all API calls
+
+**For Prefect/Dramatiq workflows:**
+- Use API keys instead of JWT tokens
+- API keys don't expire (unless set) and don't need refresh
+- Create specific API keys for different services with appropriate permissions
 
 ### Where things live (quick map)
 - Tickets/docs
@@ -86,5 +124,6 @@ curl http://localhost:8000/training/datasets/<dataset_id> | jq
 ### References
 - See `docs/training-data-pipeline.md` for fuller runbook and schema examples
 - Implementation scaffolds for `TrainingDataCollector`, `RealDataLoader`, `TrainingDatasetManager` are in `docs/tickets/113.md`
+
 
 

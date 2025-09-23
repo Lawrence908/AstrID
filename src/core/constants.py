@@ -27,6 +27,12 @@ API_WORKERS = int(os.getenv("API_WORKERS", "1"))
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
+# API KEYS
+TRAINING_PIPELINE_API_KEY = os.getenv("TRAINING_PIPELINE_API_KEY")
+PREFECT_WORKFLOWS_API_KEY = os.getenv("PREFECT_WORKFLOWS_API_KEY")
+READ_ONLY_API_KEY = os.getenv("READ_ONLY_API_KEY")
+FULL_ACCESS_API_KEY = os.getenv("FULL_ACCESS_API_KEY")
+
 # API metadata (from core/constants.py)
 API_TITLE = "AstrID API"
 API_DESCRIPTION = (
@@ -120,6 +126,9 @@ VIZIER_TIMEOUT = int(os.getenv("VIZIER_TIMEOUT", "300"))
 # Twitter OAuth
 TWITTER_APP_ID = os.getenv("TWITTER_APP_ID")
 TWITTER_APP_SECRET = os.getenv("TWITTER_APP_SECRET")
+
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 # Database Pool Configuration
 # Supabase has strict connection limits in Session mode

@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from src.adapters.api.docs import create_openapi_schema
 from src.adapters.api.rate_limiting import RATE_LIMITS, RateLimitingMiddleware
-from src.adapters.api.routes import auth, health, mlflow, storage, stream
+from src.adapters.api.routes import api_keys, auth, health, mlflow, storage, stream
 from src.adapters.api.routes.workers import router as workers_router
 from src.adapters.api.versioning import APIVersioningMiddleware
 from src.core.api.response_wrapper import create_response
@@ -220,6 +220,9 @@ async def validation_exception_handler(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(api_keys.router)
+app.include_router(api_keys.router)
+
 app.include_router(observations_router, prefix="/observations", tags=["observations"])
 app.include_router(detections_router, prefix="/detections", tags=["detections"])
 app.include_router(curation_router, prefix="/curation", tags=["curation"])

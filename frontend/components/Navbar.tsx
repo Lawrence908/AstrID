@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { User, BookOpen, Eye, Search, BarChart3, Users, Settings, Workflow } from 'lucide-react'
+import { User, BookOpen, Eye, Search, BarChart3, Users, Settings, Workflow, Shield } from 'lucide-react'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { useRouter } from 'next/navigation'
 
@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Workflows', href: '/dashboard/workflows', icon: Workflow },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { name: 'Admin', href: '/dashboard/admin', icon: Shield },
 ]
 
 export default function Navbar() {

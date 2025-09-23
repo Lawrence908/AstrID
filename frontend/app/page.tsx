@@ -22,7 +22,8 @@ import {
   Gauge,
   Cpu,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Shield
 } from 'lucide-react'
 import { dashboardApi } from '@/lib/api/dashboard'
 
@@ -80,6 +81,15 @@ const mainSections = [
     href: '/dashboard/settings',
     status: 'in-development',
     features: ['System Configuration', 'API Settings', 'Notification Preferences', 'Data Management']
+  },
+  {
+    id: 'admin',
+    title: 'Admin',
+    description: 'Admin tools: API keys and surveys',
+    icon: <Shield className="w-8 h-8" />,
+    href: '/dashboard/admin',
+    status: 'in-development',
+    features: ['API Keys', 'Surveys (soon)', 'RBAC-guarded']
   }
 ]
 

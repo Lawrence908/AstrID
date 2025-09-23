@@ -8,6 +8,7 @@ type AuthContextValue = {
   session: Session | null
   profile: { email?: string } | null
   signOut: () => Promise<void>
+  getToken?: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextValue>({
   session: null,
   profile: null,
   signOut: async () => {},
+  getToken: async () => null,
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -59,8 +61,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const getToken = async () => {
+    // Prefer live session token
+    if (session?.access_token) return session.access_token
+    // Fallback to fetching from supabase
+    if (!supabase) return null
+    const { data } = await supabase.auth.getSession()
+    return data.session?.access_token ?? null
+  }
+
   return (
-    <AuthContext.Provider value={{ supabase, session, profile, signOut }}>
+    <AuthContext.Provider value={{ supabase, session, profile, signOut, getToken }}>
       {children}
     </AuthContext.Provider>
   )

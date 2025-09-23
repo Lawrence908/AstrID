@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.adapters.auth.api_key_auth import require_permission_or_api_key
 from src.adapters.auth.rbac import (
     Permission,
     UserWithRole,
@@ -551,9 +552,7 @@ async def ingest_mast_observations(
 async def create_reference_dataset(
     request: ReferenceDatasetRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     """Create a complete reference dataset with image, catalog, and mask."""
     try:
@@ -594,9 +593,7 @@ async def create_reference_dataset(
 async def batch_ingest_random_observations(
     request: BatchIngestionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Batch ingest observations from random sky positions."""
     try:
@@ -654,9 +651,7 @@ async def batch_ingest_random_observations(
 async def ingest_from_directory(
     request: DirectoryIngestionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Ingest observations from FITS files in a directory."""
     try:

@@ -9,10 +9,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.adapters.auth.api_key_auth import require_permission_or_api_key
 from src.adapters.auth.rbac import (
     Permission,
-    UserWithRole,
-    require_permission,
 )
 from src.core.api.response_wrapper import ResponseEnvelope, create_response
 from src.core.db.session import get_db
@@ -82,9 +81,7 @@ class DetectionStatistics(BaseModel):
 async def run_inference(
     request: InferenceRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Run ML inference on an observation to detect anomalies."""
     try:
@@ -144,7 +141,7 @@ async def list_detections(
     limit: int = Query(100, le=1000, description="Maximum number of detections"),
     offset: int = Query(0, ge=0, description="Number of detections to skip"),
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """List detections with optional filtering and pagination."""
     try:
@@ -204,7 +201,7 @@ async def list_detections(
 async def get_detection(
     detection_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get a specific detection by ID."""
     try:
@@ -242,9 +239,7 @@ async def validate_detection(
     detection_id: str,
     validation: DetectionValidation,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Validate a detection through human review."""
     try:
@@ -257,7 +252,9 @@ async def validate_detection(
             "is_validated": validation.is_valid,
             "human_label": validation.human_label,
             "validation_confidence": validation.validation_confidence,
-            "validated_by": getattr(current_user, "username", "system"),
+            "validated_by": getattr(auth, "username", "system")
+            if hasattr(auth, "username")
+            else "api_key",
             "validation_timestamp": datetime.now(UTC).isoformat(),
             "status": "validated" if validation.is_valid else "rejected",
         }
@@ -289,7 +286,7 @@ async def get_detection_statistics(
     date_from: str | None = Query(None, description="Start date (ISO format)"),
     date_to: str | None = Query(None, description="End date (ISO format)"),
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get comprehensive detection statistics and analytics."""
     try:
@@ -346,7 +343,7 @@ async def get_detection_statistics(
 async def get_model_performance(
     model_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get detailed performance metrics for a specific model."""
     try:
@@ -390,9 +387,7 @@ async def batch_validate_detections(
     detection_ids: list[str],
     validation: DetectionValidation,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Validate multiple detections in batch."""
     try:
@@ -450,9 +445,7 @@ async def batch_validate_detections(
 async def process_observation(
     observation_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Process an observation for anomaly detection."""
     try:
@@ -497,7 +490,7 @@ async def process_observation(
 async def get_detection_result(
     detection_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get a detection result by ID."""
     try:
@@ -533,7 +526,7 @@ async def get_detection_result(
 async def get_detections_by_observation(
     observation_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get all detection results for an observation."""
     try:
@@ -567,7 +560,7 @@ async def search_detections_by_confidence(
         1.0, ge=0.0, le=1.0, description="Maximum confidence"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Search detection results by confidence range."""
     try:
@@ -607,9 +600,7 @@ async def validate_detection_result(
     detection_id: str,
     validation_data: DetectionValidation,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Validate a detection result."""
     try:
@@ -622,7 +613,9 @@ async def validate_detection_result(
             else "rejected",
             "human_label": validation_data.human_label,
             "validation_confidence": validation_data.validation_confidence,
-            "validated_by": getattr(current_user, "username", "system"),
+            "validated_by": getattr(auth, "username", "system")
+            if hasattr(auth, "username")
+            else "api_key",
             "validated_at": datetime.now(UTC).isoformat(),
         }
 
@@ -647,7 +640,7 @@ async def validate_detection_result(
 )
 async def get_detection_metrics_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    auth=Depends(require_permission_or_api_key(Permission.READ_DATA)),
 ) -> JSONResponse:
     """Get comprehensive detection metrics summary."""
     try:
@@ -675,9 +668,7 @@ async def get_detection_metrics_summary(
 async def batch_process_observations(
     observation_ids: list[str],
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Process multiple observations in batch."""
     try:
