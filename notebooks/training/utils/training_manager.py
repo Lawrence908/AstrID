@@ -63,6 +63,10 @@ class TrainingManager:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Using device: {self.device}")
 
+        # Training options
+        self.use_amp = bool(getattr(self.config, "use_amp", torch.cuda.is_available()))
+        self.grad_accum_steps = int(getattr(self.config, "grad_accum_steps", 1))
+
     async def start_training_run(
         self,
         model: nn.Module,
@@ -260,17 +264,23 @@ class TrainingManager:
         all_targets = []
         all_scores = []
         inference_times = []
+        num_batches_accounted = 0
+
+        scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
 
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(self.device), target.to(self.device)
 
             # Forward/Backward pass with OOM resilience
             start_time = time.time()
-            optimizer.zero_grad()
+            if (batch_idx % self.grad_accum_steps) == 0:
+                optimizer.zero_grad(set_to_none=True)
             try:
-                output = model(data)
-                loss = criterion(output, target)
-                loss.backward()
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    output = model(data)
+                    loss = criterion(output, target)
+                    loss = loss / self.grad_accum_steps
+                scaler.scale(loss).backward()
             except RuntimeError as oom_err:
                 if "out of memory" in str(oom_err).lower():
                     logger.warning(
@@ -283,17 +293,29 @@ class TrainingManager:
 
             # Gradient clipping
             if self.config.gradient_clip_norm > 0:
+                # Unscale before clipping when using AMP
+                if self.use_amp:
+                    scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), self.config.gradient_clip_norm
                 )
 
-            optimizer.step()
+            # Optimizer step (respect grad accumulation)
+            if ((batch_idx + 1) % self.grad_accum_steps) == 0:
+                if self.use_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
 
             # Record metrics
             inference_time = time.time() - start_time
             inference_times.append(inference_time)
 
-            total_loss += loss.item()
+            total_loss += (
+                loss.item() * self.grad_accum_steps
+            )  # undo scaling for reporting
+            num_batches_accounted += 1
 
             # Convert outputs for metrics calculation
             predictions = (
@@ -302,7 +324,9 @@ class TrainingManager:
             scores = torch.sigmoid(output).cpu().detach().numpy().flatten()
 
             all_predictions.extend(predictions.cpu().detach().numpy().flatten())
-            all_targets.extend(target.cpu().detach().numpy().flatten())
+            # Ensure binary targets {0,1}
+            target_bin = (target > 0.5).float()
+            all_targets.extend(target_bin.cpu().detach().numpy().flatten())
             all_scores.extend(scores)
 
             if batch_idx % 10 == 0:
@@ -311,7 +335,8 @@ class TrainingManager:
                 )
 
         # Calculate epoch metrics
-        avg_loss = total_loss / len(train_loader)
+        denom = max(1, num_batches_accounted)
+        avg_loss = total_loss / denom
 
         # Calculate comprehensive metrics
         all_predictions = np.array(all_predictions)
@@ -340,6 +365,7 @@ class TrainingManager:
         all_targets = []
         all_scores = []
         inference_times = []
+        num_batches_accounted = 0
 
         with torch.no_grad():
             for data, target in val_loader:
@@ -348,8 +374,9 @@ class TrainingManager:
                 # Forward pass with OOM resilience
                 start_time = time.time()
                 try:
-                    output = model(data)
-                    loss = criterion(output, target)
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        output = model(data)
+                        loss = criterion(output, target)
                 except RuntimeError as oom_err:
                     if "out of memory" in str(oom_err).lower():
                         logger.warning(
@@ -363,6 +390,7 @@ class TrainingManager:
                 inference_times.append(inference_time)
 
                 total_loss += loss.item()
+                num_batches_accounted += 1
 
                 # Convert outputs for metrics calculation
                 predictions = (
@@ -371,11 +399,13 @@ class TrainingManager:
                 scores = torch.sigmoid(output).cpu().detach().numpy().flatten()
 
                 all_predictions.extend(predictions.cpu().detach().numpy().flatten())
-                all_targets.extend(target.cpu().detach().numpy().flatten())
+                target_bin = (target > 0.5).float()
+                all_targets.extend(target_bin.cpu().detach().numpy().flatten())
                 all_scores.extend(scores)
 
         # Calculate epoch metrics
-        avg_loss = total_loss / len(val_loader)
+        denom = max(1, num_batches_accounted)
+        avg_loss = total_loss / denom
 
         # Calculate comprehensive metrics
         all_predictions = np.array(all_predictions)

@@ -128,6 +128,9 @@ class AstronomicalDataset(Dataset):
         if mask.ndim == 2:
             mask = np.expand_dims(mask, axis=0)
 
+        # Ensure binary mask {0,1}
+        mask = (mask > 0.5).astype(np.float32)
+
         # Convert to tensors
         image_tensor = torch.from_numpy(image.astype(np.float32))
         mask_tensor = torch.from_numpy(mask.astype(np.float32))
