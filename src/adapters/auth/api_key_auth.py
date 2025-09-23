@@ -98,9 +98,10 @@ def require_permission_or_api_key(permission: Permission):
         if isinstance(auth, APIKeyAuth):
             # Check API key permissions
             if not auth.has_permission(permission.value):
+                available_permissions = auth.permissions or []
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"API key does not have required permission: {permission.value}",
+                    detail=f"API key does not have required permission: {permission.value}. Available permissions: {available_permissions}",
                 )
         else:
             # Check JWT user permissions (existing logic)
@@ -126,9 +127,10 @@ def require_any_permission_or_api_key(permissions: list[Permission]):
         if isinstance(auth, APIKeyAuth):
             # Check API key permissions
             if not auth.has_any_permission(permission_values):
+                available_permissions = auth.permissions or []
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"API key does not have any of the required permissions: {permission_values}",
+                    detail=f"API key does not have any of the required permissions: {permission_values}. Available permissions: {available_permissions}",
                 )
         else:
             # Check JWT user permissions (existing logic)
@@ -154,9 +156,10 @@ def require_all_permissions_or_api_key(permissions: list[Permission]):
         if isinstance(auth, APIKeyAuth):
             # Check API key permissions
             if not auth.has_all_permissions(permission_values):
+                available_permissions = auth.permissions or []
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"API key does not have all required permissions: {permission_values}",
+                    detail=f"API key does not have all required permissions: {permission_values}. Available permissions: {available_permissions}",
                 )
         else:
             # Check JWT user permissions (existing logic)
