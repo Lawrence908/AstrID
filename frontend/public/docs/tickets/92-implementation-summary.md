@@ -215,16 +215,16 @@ preprocess_observation.send("obs_123")
 
 ```bash
 # Get worker status
-curl http://localhost:8000/workers/status
+curl http://127.0.0.1:8000/workers/status
 
 # Get worker health
-curl http://localhost:8000/workers/health
+curl http://127.0.0.1:8000/workers/health
 
 # Get performance metrics
-curl http://localhost:8000/workers/metrics?time_window_hours=24
+curl http://127.0.0.1:8000/workers/metrics?time_window_hours=24
 
 # Start specific worker type
-curl -X POST http://localhost:8000/workers/observation_ingestion/start
+curl -X POST http://127.0.0.1:8000/workers/observation_ingestion/start
 ```
 
 ## Integration Points

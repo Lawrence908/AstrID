@@ -14,7 +14,7 @@ Follow these steps to populate real detections and create a training dataset con
 - Environment variables set for Supabase and R2
 
 Verify health:
-- GET http://localhost:8000/health
+- GET http://127.0.0.1:8000/health
 - MLflow UI: http://localhost:5000
 - Prefect UI: http://localhost:4200
 
@@ -60,7 +60,7 @@ Confirm:
 Goal: collect detections in a time window into a `TrainingDataset` + `TrainingSample`s and log minimal stats to MLflow.
 
 Endpoint:
-- POST http://localhost:8000/training/datasets/collect
+- POST http://127.0.0.1:8000/training/datasets/collect
 
 Body example:
 ```json
@@ -81,8 +81,8 @@ Behavior:
 - Logs dataset metrics to MLflow (best-effort).
 
 Confirm:
-- GET http://localhost:8000/training/datasets → returns newly created dataset.
-- GET http://localhost:8000/training/datasets/{dataset_id} → shows counts.
+- GET http://127.0.0.1:8000/training/datasets → returns newly created dataset.
+- GET http://127.0.0.1:8000/training/datasets/{dataset_id} → shows counts.
 - MLflow run named `training_data_{dataset_id}` appears in UI.
 
 Tips if `total_samples` is 0:
@@ -94,7 +94,7 @@ Tips if `total_samples` is 0:
 Notebook: `notebooks/ml_training_data/real_data_loading.ipynb`
 
 Steps:
-1. Ensure `API_BASE = "http://localhost:8000"` (no `/v1`).
+1. Ensure `API_BASE = "http://127.0.0.1:8000"` (no `/v1`).
 2. Run the cell that POSTs `/training/datasets/collect` (or copy the returned `dataset_id`).
 3. Run the list/detail cells to verify the dataset.
 

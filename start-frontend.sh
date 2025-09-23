@@ -33,7 +33,7 @@ echo ""
 # Start the development server
 echo "🌐 Starting development server on http://localhost:3000"
 echo "📊 Frontend will be available at: http://localhost:3000"
-echo "🔧 Backend API should be running on: http://localhost:8000"
+echo "🔧 Backend API should be running on: http://127.0.0.1:8000"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""

@@ -36,9 +36,9 @@ alias astrid-frontend-restart='docker-compose -p astrid-dev -f docker-compose.ya
 
 # Development helpers
 alias astrid-status='docker-compose -p astrid-dev -f docker-compose.yaml ps'
-alias astrid-health='curl -s http://localhost:8000/health | jq .'
-alias astrid-frontend='open http://localhost:3000'
-alias astrid-api-docs='open http://localhost:8000/docs'
+alias astrid-health='curl -s http://127.0.0.1:8000/health | jq .'
+alias astrid-frontend='open http://localhost:3010'
+alias astrid-api-docs='open http://127.0.0.1:8000/docs'
 alias astrid-mlflow='open http://localhost:5000'
 alias astrid-prefect='open http://localhost:4200'
 
@@ -58,7 +58,7 @@ alias astrid-db-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -
 alias astrid-errors='docker-compose -p astrid-dev -f docker-compose.yaml logs --tail=50 | grep -i error'
 
 # Quick access URLs
-alias astrid-urls='echo "Frontend: http://localhost:3000" && echo "API: http://localhost:8000" && echo "API Docs: http://localhost:8000/docs" && echo "MLflow: http://localhost:5000" && echo "Prefect: http://localhost:4200"'
+alias astrid-urls='echo "Frontend: http://localhost:3000" && echo "API: http://127.0.0.1:8000" && echo "API Docs: http://127.0.0.1:8000/docs" && echo "MLflow: http://localhost:5000" && echo "Prefect: http://localhost:4200"'
 
 echo "  Available aliases:"
 echo "    astrid-up, astrid-down, astrid-logs, astrid-restart, astrid-build, astrid-prune"

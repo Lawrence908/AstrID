@@ -19,7 +19,7 @@ The AstrID API provides comprehensive endpoints for astronomical observation man
 
 - **Production**: `https://api.astrid.chrislawrence.ca/v1`
 - **Staging**: `https://staging-api.astrid.chrislawrence.ca/v1`
-- **Development**: `http://localhost:8000/v1`
+- **Development**: `http://127.0.0.1:8000/v1`
 
 ### Quick Start
 

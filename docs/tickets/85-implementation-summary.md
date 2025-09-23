@@ -214,9 +214,9 @@ scripts/
 ```
 
 ### Accessing Documentation
-- **Interactive Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI Spec**: http://localhost:8000/openapi.json
+- **Interactive Docs**: http://127.0.0.1:8000/docs
+- **ReDoc**: http://127.0.0.1:8000/redoc
+- **OpenAPI Spec**: http://127.0.0.1:8000/openapi.json
 
 ### Rate Limiting Headers
 ```http

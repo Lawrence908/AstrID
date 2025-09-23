@@ -210,7 +210,7 @@ graph TD
 - **Application logs**: `./logs/` directory
 - **Health endpoints**: 
   - Prefect: http://localhost:4200/health
-  - API: http://localhost:8000/health
+  - API: http://127.0.0.1:8000/health
 
 ##  Next Steps
 

@@ -121,7 +121,7 @@ services:
         condition: service_healthy
     command: python -m uvicorn src.adapters.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 300s # Set to 30s later in development
       timeout: 10s
       retries: 3
@@ -207,7 +207,7 @@ services:
       - "3010:3010"
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
       - PORT=3010
     volumes:
       - ./frontend:/app
