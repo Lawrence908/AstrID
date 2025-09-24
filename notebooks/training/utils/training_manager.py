@@ -78,6 +78,16 @@ class TrainingManager:
     ) -> str:
         """Start a comprehensive training run with full tracking."""
 
+        # Disable MLflow auto-logging to prevent duplicate runs
+        try:
+            import mlflow
+
+            mlflow.pytorch.autolog(disable=True)
+            mlflow.autolog(disable=True)
+            logger.info("🔕 Disabled MLflow auto-logging to prevent duplicate runs")
+        except Exception as e:
+            logger.warning(f"Could not disable MLflow auto-logging: {e}")
+
         # Start MLflow run
         self.current_run_id = self.experiment_tracker.start_run(
             experiment_id=self.config.experiment_id,
@@ -85,17 +95,33 @@ class TrainingManager:
             tags=self.config.tags,
         )
 
-        # Log hyperparameters
+        # Log comprehensive hyperparameters (consolidating both runs)
         hyperparams = {
+            # Training configuration
             "batch_size": self.config.batch_size,
             "learning_rate": self.config.learning_rate,
             "num_epochs": self.config.num_epochs,
             "weight_decay": self.config.weight_decay,
             "gradient_clip_norm": self.config.gradient_clip_norm,
+            # Model architecture
             "model_architecture": "unet",
+            "model_type": "unet",
             "input_size": str(self.config.input_size),
+            "input_channels": self.config.input_channels,
+            "output_channels": self.config.output_channels,
             "initial_filters": self.config.initial_filters,
             "depth": self.config.depth,
+            # Data configuration
+            "validation_split": self.config.validation_split,
+            "test_split": self.config.test_split,
+            # Training strategy
+            "early_stopping_patience": self.config.early_stopping_patience,
+            "checkpoint_frequency": self.config.checkpoint_frequency,
+            # Energy tracking
+            "energy_tracking_enabled": self.config.enable_energy_tracking,
+            "gpu_sampling_hz": self.config.gpu_power_sampling_hz
+            if hasattr(self.config, "gpu_power_sampling_hz")
+            else 1.0,
         }
 
         self.experiment_tracker.log_parameters(hyperparams, self.current_run_id)
@@ -105,8 +131,25 @@ class TrainingManager:
 
         # Start GPU monitoring if enabled
         if self.gpu_monitor and self.config.enable_energy_tracking:
+            # Use shorter sampling interval for better granularity
+            self.gpu_monitor.sampling_interval = 0.5  # 0.5 seconds instead of 1.0
             await self.gpu_monitor.start_monitoring()
-            logger.info("🔋 GPU energy monitoring started")
+            logger.info("🔋 GPU energy monitoring started with 0.5s sampling interval")
+
+            # Test GPU monitoring with a quick sample
+            import asyncio
+
+            await asyncio.sleep(2)  # Wait 2 seconds to collect some samples
+            test_energy = self.gpu_monitor.summarize()
+            logger.info(
+                f"🧪 GPU monitoring test: {test_energy.total_energy_wh:.3f} Wh, {test_energy.average_power_watts:.1f}W, {test_energy.total_samples} samples"
+            )
+
+            # Reset history to start fresh for training (keeps monitoring active)
+            self.gpu_monitor.reset_history()
+            logger.info(
+                "🔄 Reset GPU monitoring history - ready for training energy tracking"
+            )
 
         # Training loop
         model = model.to(self.device)
@@ -119,6 +162,11 @@ class TrainingManager:
             for epoch in range(self.config.num_epochs):
                 logger.info(f"Epoch {epoch+1}/{self.config.num_epochs}")
 
+                # Track epoch start time for energy calculation
+                if self.gpu_monitor and self.config.enable_energy_tracking:
+                    epoch_start_time = time.time()
+                    # Don't reset history - let it accumulate and we'll calculate per-epoch energy differently
+
                 # Training phase
                 train_metrics = await self._train_epoch(
                     model, train_loader, optimizer, criterion, epoch
@@ -128,6 +176,50 @@ class TrainingManager:
                 val_metrics = await self._validate_epoch(
                     model, val_loader, criterion, epoch
                 )
+
+                # Calculate per-epoch energy metrics
+                if self.gpu_monitor and self.config.enable_energy_tracking:
+                    epoch_duration = time.time() - epoch_start_time
+
+                    # Check monitoring status before summarizing
+                    monitoring_active = (
+                        hasattr(self.gpu_monitor, "_monitor_task")
+                        and not self.gpu_monitor._monitor_task.done()
+                    )
+                    logger.info(
+                        f"🔋 GPU monitoring status: active={monitoring_active}, is_monitoring={self.gpu_monitor.is_monitoring}"
+                    )
+
+                    # Get current total energy and calculate per-epoch energy
+                    total_energy = self.gpu_monitor.summarize()
+
+                    # For now, just use the total energy (we'll improve this later)
+                    # TODO: Implement proper per-epoch energy calculation
+                    epoch_energy_metrics = {
+                        "training_energy_wh": total_energy.total_energy_wh,
+                        "training_avg_power_w": total_energy.average_power_watts,
+                        "training_peak_power_w": total_energy.peak_power_watts,
+                        "training_duration_seconds": total_energy.duration_seconds,
+                        "training_carbon_footprint_kg": total_energy.carbon_footprint_kg
+                        if total_energy.carbon_footprint_kg is not None
+                        else 0.0,
+                    }
+
+                    logger.info(
+                        f"🔋 Epoch {epoch+1} energy summary: {total_energy.total_energy_wh:.3f} Wh, {total_energy.average_power_watts:.1f}W avg, {total_energy.total_samples} samples, epoch duration: {epoch_duration:.1f}s"
+                    )
+
+                    # If no samples, restart monitoring
+                    if total_energy.total_samples == 0:
+                        logger.warning(
+                            "🔋 No GPU samples detected, checking monitoring task..."
+                        )
+                        if not monitoring_active:
+                            logger.info("🔋 Restarting GPU monitoring...")
+                            await self.gpu_monitor.start_monitoring()
+
+                    # Merge into val_metrics (used for epoch summary and logging)
+                    val_metrics.update(epoch_energy_metrics)
 
                 # Update learning rate
                 if scheduler:
