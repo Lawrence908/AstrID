@@ -94,18 +94,20 @@ The API supports multiple versioning strategies:
         },
     ]
 
-    # Add security schemes
-    openapi_schema["components"]["securitySchemes"] = {
-        "BearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT",
-            "description": "JWT token for authentication",
-        }
+    # Add/merge security schemes. Use the same name FastAPI generates for HTTPBearer: "HTTPBearer"
+    components = openapi_schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+
+    # Preserve any existing schemes and ensure HTTPBearer exists (Swagger relies on the name match)
+    security_schemes["HTTPBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token for authentication",
     }
 
-    # Add global security
-    openapi_schema["security"] = [{"BearerAuth": []}]
+    # Set global security to use HTTPBearer so the Authorize token is sent in Try It Out
+    openapi_schema["security"] = [{"HTTPBearer": []}]
 
     # Add comprehensive tags
     openapi_schema["tags"] = [

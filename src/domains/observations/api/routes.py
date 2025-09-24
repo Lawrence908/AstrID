@@ -721,6 +721,18 @@ class MetadataRequest(BaseModel):
     observation_id: str | None = None
 
 
+class IngestionResult(BaseModel):
+    """Ingestion result payload for survey ingestion endpoints."""
+
+    survey_id: str
+    search_parameters: dict
+    total_found: int
+    converted: int
+    skipped: int
+    observations: list[ObservationResponse]
+    errors: list[dict]
+
+
 @router.post(
     "/surveys/{survey_id}/search",
     responses={
@@ -791,7 +803,7 @@ async def search_survey_observations(
 
 @router.post(
     "/surveys/{survey_id}/ingest",
-    response_model=ResponseEnvelope[list[ObservationResponse]],
+    response_model=ResponseEnvelope[IngestionResult],
     responses={
         200: {"description": "Survey observations ingested successfully"},
         400: {"description": "Invalid ingest parameters"},
@@ -804,8 +816,8 @@ async def ingest_survey_observations(
     survey_id: str,
     request: SurveySearchRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
+    current_user: UserWithRole | None = Depends(
+        require_permission_or_api_key(Permission.MANAGE_OPERATIONS)
     ),
 ) -> JSONResponse:
     """Ingest observations from external survey APIs into our database."""
@@ -851,6 +863,7 @@ async def ingest_survey_observations(
 
         # Normalize and create observations using adapters
         created_observations = []
+        conversion_errors: list[dict] = []
         hst_adapter = HSTAdapter()
         jwst_adapter = JWSTAdapter()
 
@@ -877,32 +890,63 @@ async def ingest_survey_observations(
                     created_observations.append(created_obs)
 
             except Exception as e:
-                # Log error but continue processing other observations
-                print(
-                    f"Failed to process observation {mast_result.observation_id}: {e}"
+                # Record error but continue processing other observations
+                conversion_errors.append(
+                    {
+                        "observation_id": mast_result.observation_id,
+                        "mission": mast_result.mission,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                )
+                # Structured log for troubleshooting
+                from src.core.logging import configure_domain_logger
+
+                log = configure_domain_logger("observations.ingest")
+                log.warning(
+                    "conversion_failed",
+                    extra={
+                        "observation_id": mast_result.observation_id,
+                        "mission": mast_result.mission,
+                        "ra": mast_result.ra,
+                        "dec": mast_result.dec,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
                 )
                 continue
 
         # Convert to response format
-        response_observations = []
+        response_observations: list[ObservationResponse] = []
         for obs in created_observations:
-            response_obs = ObservationResponse(
-                id=str(obs.id),
-                survey=survey_id,
-                observation_id=obs.observation_id,
-                ra=obs.ra,
-                dec=obs.dec,
-                observation_time=obs.observation_time.isoformat(),
-                filter_band=obs.filter_band,
-                exposure_time=obs.exposure_time,
-                fits_url=obs.fits_url,
-                status=obs.status.value,
-                created_at=obs.created_at.isoformat(),
-                updated_at=obs.updated_at.isoformat(),
+            response_observations.append(
+                ObservationResponse(
+                    id=str(obs.id),
+                    survey=survey_id,
+                    observation_id=obs.observation_id,
+                    ra=obs.ra,
+                    dec=obs.dec,
+                    observation_time=obs.observation_time.isoformat(),
+                    filter_band=obs.filter_band,
+                    exposure_time=obs.exposure_time,
+                    fits_url=obs.fits_url,
+                    status=obs.status.value,
+                    created_at=obs.created_at.isoformat(),
+                    updated_at=obs.updated_at.isoformat(),
+                )
             )
-            response_observations.append(response_obs)
 
-        return create_response(response_observations)
+        result = IngestionResult(
+            survey_id=survey_id,
+            search_parameters=request.model_dump(),
+            total_found=len(mast_results),
+            converted=len(response_observations),
+            skipped=max(len(mast_results) - len(response_observations), 0),
+            observations=response_observations,
+            errors=conversion_errors,
+        )
+
+        return create_response(result)
 
     except Exception as e:
         raise HTTPException(
@@ -926,7 +970,9 @@ async def get_survey_observations(
     limit: int = Query(100, le=1000, description="Maximum number of observations"),
     offset: int = Query(0, ge=0, description="Number of observations to skip"),
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(require_permission(Permission.READ_DATA)),
+    current_user: UserWithRole | None = Depends(
+        require_permission_or_api_key(Permission.READ_DATA)
+    ),
 ) -> JSONResponse:
     """Get observations for a specific survey."""
     try:

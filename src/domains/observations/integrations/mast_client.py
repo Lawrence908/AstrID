@@ -1,6 +1,7 @@
 """MAST (Mikulski Archive for Space Telescopes) API client for astronomical observations."""
 
 import asyncio
+import json as jsonlib
 import time
 from datetime import datetime
 from typing import Any
@@ -36,7 +37,7 @@ class MASTClient:
 
     def __init__(
         self,
-        base_url: str = "https://mast.stsci.edu/api/v0.1",
+        base_url: str = "https://mast.stsci.edu/api/v0",
         timeout: float = 30.0,
         max_retries: int = 3,
         rate_limit_delay: float = 1.0,
@@ -104,6 +105,20 @@ class MASTClient:
         """
         await self._rate_limit()
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
+
+        # MAST Mashup expects a single 'request' field containing the JSON string
+        # See docs: https://mast.stsci.edu/api/v0/ (invoke endpoint)
+        if endpoint.strip("/") == "invoke" and "json" in kwargs:
+            mashup_request = kwargs.pop("json")
+            # Send as application/x-www-form-urlencoded with 'request' payload
+            kwargs["data"] = {"request": jsonlib.dumps(mashup_request)}
+            headers = kwargs.pop("headers", {})
+            headers = {
+                **self.client.headers,
+                **headers,
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+            kwargs["headers"] = headers
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -236,14 +251,11 @@ class MASTClient:
             params["params"]["collection"] = collections
 
         # Add time range filters
+        # MAST Mashup uses MJD (Modified Julian Date). Unix seconds -> MJD: ts/86400 + 40587
         if start_time:
-            params["params"]["t_min"] = (
-                start_time.timestamp() / 86400.0 + 2440587.5
-            )  # Convert to MJD
+            params["params"]["t_min"] = start_time.timestamp() / 86400.0 + 40587.0
         if end_time:
-            params["params"]["t_max"] = (
-                end_time.timestamp() / 86400.0 + 2440587.5
-            )  # Convert to MJD
+            params["params"]["t_max"] = end_time.timestamp() / 86400.0 + 40587.0
 
         try:
             response_data = await self._make_request("POST", "invoke", json=params)
@@ -295,10 +307,16 @@ class MASTClient:
             # Observation time - handle various formats
             obs_time_mjd = obs_data.get("t_min")
             if obs_time_mjd:
-                # Convert MJD to datetime
-                obs_time = datetime.fromtimestamp(
-                    (float(obs_time_mjd) - 2440587.5) * 86400.0
-                )
+                # Convert MJD to datetime: Unix seconds = (MJD - 40587) * 86400
+                try:
+                    mjd_val = float(obs_time_mjd)
+                    unix_seconds = (mjd_val - 40587.0) * 86400.0
+                    obs_time = datetime.fromtimestamp(unix_seconds)
+                except Exception as conv_err:
+                    self.logger.warning(
+                        f"Failed MJD->datetime conversion for obs_id={observation_id}, mjd={obs_time_mjd}: {conv_err}"
+                    )
+                    raise
             else:
                 obs_time = datetime.now()  # Fallback
 
