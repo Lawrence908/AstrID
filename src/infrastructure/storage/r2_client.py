@@ -183,7 +183,7 @@ class R2StorageClient:
                 "s3",
                 endpoint_url=self.endpoint_url,
                 config=self.boto_config,
-                verify=self._ca_bundle or self._verify_ssl,
+                verify=self._ca_bundle if self._ca_bundle else self._verify_ssl,
             ) as s3_client:
                 # Upload file
                 await s3_client.put_object(
@@ -220,7 +220,7 @@ class R2StorageClient:
                 "s3",
                 endpoint_url=self.endpoint_url,
                 config=self.boto_config,
-                verify=self._ca_bundle or self._verify_ssl,
+                verify=self._ca_bundle if self._ca_bundle else self._verify_ssl,
             ) as s3_client:
                 response = await s3_client.get_object(Bucket=bucket, Key=key)
                 data = await response["Body"].read()
@@ -251,7 +251,7 @@ class R2StorageClient:
                 "s3",
                 endpoint_url=self.endpoint_url,
                 config=self.boto_config,
-                verify=self._ca_bundle or self._verify_ssl,
+                verify=self._ca_bundle if self._ca_bundle else self._verify_ssl,
             ) as s3_client:
                 await s3_client.delete_object(Bucket=bucket, Key=key)
 
@@ -284,7 +284,7 @@ class R2StorageClient:
                 "s3",
                 endpoint_url=self.endpoint_url,
                 config=self.boto_config,
-                verify=self._ca_bundle or self._verify_ssl,
+                verify=self._ca_bundle if self._ca_bundle else self._verify_ssl,
             ) as s3_client:
                 response = await s3_client.list_objects_v2(
                     Bucket=bucket, Prefix=prefix, MaxKeys=max_keys

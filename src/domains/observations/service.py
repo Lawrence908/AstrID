@@ -509,7 +509,7 @@ class ObservationService:
         try:
             ingestion_service = DataIngestionService()
 
-            fits_path = await ingestion_service.create_reference_dataset(
+            result = await ingestion_service.create_reference_dataset(
                 ra=ra,
                 dec=dec,
                 size=size,
@@ -517,16 +517,12 @@ class ObservationService:
                 surveys=surveys,
             )
 
-            self.logger.info(f"Successfully created reference dataset: {fits_path}")
+            self.logger.info(
+                f"Successfully created reference dataset: {result.get('r2_object_key', result.get('local_path'))}"
+            )
 
-            return {
-                "fits_file_path": fits_path,
-                "ra": ra,
-                "dec": dec,
-                "size_degrees": size,
-                "pixels": pixels,
-                "surveys": surveys or ["DSS"],
-            }
+            # Return the full result from ingestion service, which now includes R2 information
+            return result
 
         except Exception as e:
             self.logger.error(f"Failed to create reference dataset: {e}")

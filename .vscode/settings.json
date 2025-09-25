@@ -9,7 +9,7 @@
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": false,
     "python.formatting.provider": "black",
-    "python.languageServer": "Pylance",
+    "python.languageServer": "None",
     "pylance.analysis.autoSearchPaths": true,
     "pylance.analysis.extraPaths": [
         "./src"

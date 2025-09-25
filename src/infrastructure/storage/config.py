@@ -52,7 +52,7 @@ class StorageConfig:
             dvc_remote_url=DVC_REMOTE_URL or "s3://astrid-data",
             mlflow_artifact_root=MLFLOW_ARTIFACT_ROOT or "s3://astrid-models",
             r2_verify_ssl=CLOUDFLARE_R2_VERIFY_SSL,
-            r2_ca_bundle=CLOUDFLARE_R2_CA_BUNDLE,
+            r2_ca_bundle=CLOUDFLARE_R2_CA_BUNDLE if CLOUDFLARE_R2_VERIFY_SSL else None,
         )
 
     def validate(self) -> None:

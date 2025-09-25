@@ -482,9 +482,7 @@ class DirectoryIngestionRequest(IngestionRequest):
 async def ingest_mast_observations(
     request: MASTIngestionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Ingest observations from MAST for a specific sky position."""
     try:
@@ -816,9 +814,7 @@ async def ingest_survey_observations(
     survey_id: str,
     request: SurveySearchRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: UserWithRole | None = Depends(
-        require_permission_or_api_key(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> JSONResponse:
     """Ingest observations from external survey APIs into our database."""
     try:
@@ -880,9 +876,11 @@ async def ingest_survey_observations(
 
                 # Choose appropriate adapter based on mission
                 adapter = None
-                if mast_result.mission == "HST":
+                mission = (mast_result.mission or "").upper()
+                if mission == "HST":
                     adapter = hst_adapter
-                elif mast_result.mission == "JWST":
+
+                elif mission == "JWST":
                     adapter = jwst_adapter
 
                 if adapter:
@@ -923,7 +921,7 @@ async def ingest_survey_observations(
                         conversion_errors.append(
                             {
                                 "observation_id": mast_result.observation_id,
-                                "mission": mast_result.mission,
+                                "mission": mission,
                                 "error": "create_observation returned None",
                                 "error_type": "CreateFailed",
                             }
@@ -932,9 +930,26 @@ async def ingest_survey_observations(
                             "db_create_failed",
                             extra={
                                 "observation_id": mast_result.observation_id,
-                                "mission": mast_result.mission,
+                                "mission": mission,
                             },
                         )
+                else:
+                    # No adapter available for this mission
+                    conversion_errors.append(
+                        {
+                            "observation_id": mast_result.observation_id,
+                            "mission": mast_result.mission,
+                            "error": "no adapter available for mission",
+                            "error_type": "UnsupportedMission",
+                        }
+                    )
+                    log.info(
+                        "skipped_no_adapter",
+                        extra={
+                            "observation_id": mast_result.observation_id,
+                            "mission": mast_result.mission,
+                        },
+                    )
 
             except Exception as e:
                 # Record error but continue processing other observations
