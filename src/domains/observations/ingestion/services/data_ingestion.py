@@ -371,8 +371,12 @@ class DataIngestionService:
                     metadata=metadata,
                 )
 
-                # Get R2 URL for the uploaded file
-                r2_url = f"{self.r2_client.endpoint_url}/{self.r2_client.bucket_name}/{object_key}"
+                # Generate presigned URL for the uploaded file (valid for 24 hours)
+                r2_url = await self.r2_client.generate_presigned_url(
+                    bucket=self.r2_client.bucket_name,
+                    key=object_key,
+                    expiration=86400,  # 24 hours
+                )
 
                 self.logger.info(f"Uploaded reference dataset to R2: {object_key}")
 

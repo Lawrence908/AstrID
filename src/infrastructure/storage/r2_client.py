@@ -356,6 +356,52 @@ class R2StorageClient:
             self.logger.error(f"Error checking file existence in R2: {e}")
             return False
 
+    async def generate_presigned_url(
+        self,
+        bucket: str,
+        key: str,
+        expiration: int = 3600,
+        http_method: str = "GET",
+    ) -> str:
+        """Generate a presigned URL for accessing an R2 object.
+
+        Args:
+            bucket: R2 bucket name
+            key: Object key
+            expiration: URL expiration time in seconds (default: 1 hour)
+            http_method: HTTP method (default: GET)
+
+        Returns:
+            Presigned URL string
+
+        Raises:
+            ClientError: If URL generation fails
+        """
+        try:
+            session = self._get_session()
+            async with session.client(  # type: ignore[misc]
+                "s3",
+                endpoint_url=self.endpoint_url,
+                config=self.boto_config,
+                verify=self._ca_bundle if self._ca_bundle else self._verify_ssl,
+            ) as s3_client:
+                # Generate presigned URL
+                presigned_url = await s3_client.generate_presigned_url(
+                    ClientMethod="get_object",
+                    Params={"Bucket": bucket, "Key": key},
+                    ExpiresIn=expiration,
+                    HttpMethod=http_method,
+                )
+
+                self.logger.info(f"Generated presigned URL for {bucket}/{key}")
+                return presigned_url
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to generate presigned URL for {bucket}/{key}: {e}"
+            )
+            raise
+
     async def _calculate_file_hash(self, file_path: Path) -> str:
         """Calculate SHA256 hash of a file.
 

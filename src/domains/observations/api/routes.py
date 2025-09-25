@@ -529,9 +529,14 @@ async def ingest_mast_observations(
             )
             response_observations.append(response_obs)
 
+        # Commit the database transaction
+        await db.commit()
+
         return create_response(response_observations)
 
     except Exception as e:
+        # Rollback on error
+        await db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Ingestion failed: {str(e)}"
         ) from e
@@ -569,9 +574,14 @@ async def create_reference_dataset(
             surveys=request.surveys,
         )
 
+        # Commit the database transaction
+        await db.commit()
+
         return create_response(result)
 
     except Exception as e:
+        # Rollback on error
+        await db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Dataset creation failed: {str(e)}"
         ) from e
@@ -627,9 +637,14 @@ async def batch_ingest_random_observations(
             )
             response_observations.append(response_obs)
 
+        # Commit the database transaction
+        await db.commit()
+
         return create_response(response_observations)
 
     except Exception as e:
+        # Rollback on error
+        await db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Batch ingestion failed: {str(e)}"
         ) from e
