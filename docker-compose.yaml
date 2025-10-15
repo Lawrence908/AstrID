@@ -33,13 +33,11 @@ services:
     env_file:
       - .env
     environment:
-      # MLflow uses psycopg (sync driver) while main app uses asyncpg (async driver)
       - MLFLOW_ARTIFACT_ROOT=s3://astrid-models
       - MLFLOW_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=auto
-      - MLFLOW_SUPABASE_SSL_CERT_PATH=/app/certs/prod-ca-2021.crt
     ports:
       - "5000:5000"
     volumes:
@@ -47,7 +45,7 @@ services:
     networks:
       - astrid-network
     command: >
-      bash -c "pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres?pool_size=1&max_overflow=0&connect_timeout=10 --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
+      bash -lc "pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$MLFLOW_SUPABASE_PROJECT_REF:$MLFLOW_SUPABASE_PASSWORD@$MLFLOW_SUPABASE_HOST/postgres?connect_timeout=10 --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
     # Using Supabase PostgreSQL
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -66,7 +64,8 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://localhost:4200/api
-      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?pool_size=1&max_overflow=0&timeout=10
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
+      # - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:${PREFECT_SUPABASE_PASSWORD}@db.${PREFECT_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
@@ -221,8 +220,31 @@ services:
     command: ["npx", "next", "dev", "-p", "3010"]
     user: "${UID}:${GID}"
 
+  # Organizr - Unified Dashboard for all services
+  organizr:
+    image: organizr/organizr:latest
+    container_name: astrid-organizr-dev
+    ports:
+      - "8080:80"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - organizr_config:/config
+    networks:
+      - astrid-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
   redis_data:
+  organizr_config:
 
 networks:
   astrid-network:

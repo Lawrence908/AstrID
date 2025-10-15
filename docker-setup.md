@@ -13,6 +13,9 @@ This directory contains the Docker configuration for AstrID development environm
 
 # Stop the environment
 ./docker/start-dev.sh --down
+
+# Access Organizr dashboard (unified interface for all services)
+open http://localhost:8080
 ```
 
 ## Delete Everything
@@ -30,11 +33,11 @@ sudo docker system prune -a --volumes
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Frontend | 3000 | Next.js planning dashboard with hot reload |
+| **Organizr** | **8080** | **Unified dashboard for all services** |
+| Frontend | 3010 | Next.js planning dashboard with hot reload |
 | API | 8000 | FastAPI application with hot reload |
 | MLflow | 5000 | ML experiment tracking |
 | Prefect | 4200 | Workflow orchestration |
-| PostgreSQL | 5432 | Primary database |
 | Redis | 6379 | Message queue and caching |
 
 ## Key Improvements Applied
@@ -77,6 +80,12 @@ sudo docker system prune -a --volumes
 - API service automatically reloads on code changes
 - Source code is mounted as volumes for instant updates
 - Logs are persisted to `./logs/` directory
+
+### Unified Dashboard
+- **Organizr** provides a single interface for all services
+- No more managing multiple browser tabs
+- Easy access to all service URLs and status
+- Customizable dashboard with service grouping
 
 ### Health Monitoring
 - All services have health checks with proper start periods

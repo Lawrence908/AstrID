@@ -1,47 +1,73 @@
-# Dockerfile for Prefect worker and flow execution
-FROM python:3.11-slim
+# ----- Base Stage with Heavy Dependencies -----
+    FROM python:3.11-slim-bookworm AS base
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app/src
-ENV PIP_ROOT_USER_ACTION=ignore
+    # Install system dependencies for scientific computing
+    RUN apt-get update && apt-get install -y \
+        gcc \
+        g++ \
+        gfortran \
+        libopenblas-dev \
+        liblapack-dev \
+        libhdf5-dev \
+        libfftw3-dev \
+        libcfitsio-dev \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
 
-# Use a dedicated virtual environment for Python packages
-ENV VIRTUAL_ENV=/opt/venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+    # Install heavy scientific dependencies first (these rarely change)
+    RUN pip install --no-cache-dir --upgrade pip && \
+        pip install --no-cache-dir \
+        numpy \
+        scipy \
+        matplotlib \
+        pandas \
+        scikit-learn \
+        astropy \
+        opencv-python-headless \
+        && pip install --no-cache-dir \
+        torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+    # Install ML/AI dependencies
+    RUN pip install --no-cache-dir \
+        mlflow \
+        boto3 \
+        aioboto3 \
+        dvc[ssh,s3] \
+        && rm -rf /root/.cache/pip
 
-# Create app directory
-WORKDIR /app
+    # ----- Main Stage -----
+    FROM base
 
-# Copy project metadata and source code first (needed for editable install)
-COPY pyproject.toml uv.lock ./
-COPY src/ ./src/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
-COPY scripts/ ./scripts/
+    # Set environment variables
+    ENV PYTHONUNBUFFERED=1
+    ENV PYTHONDONTWRITEBYTECODE=1
+    ENV PYTHONPATH=/app/src
 
-# Install Python dependencies into the venv (editable install requires src present)
-RUN pip install --no-cache-dir uv && \
-    uv pip install --no-cache-dir -e .
+    # Create app directory
+    WORKDIR /app
 
-# Install requests for the wait script
-RUN pip install --no-cache-dir requests
+    # Copy only dependency files first for better caching
+    COPY pyproject.toml uv.lock ./
 
-# Create logs directory
-RUN mkdir -p /app/logs
+    # Install remaining Python dependencies (these change more often)
+    RUN pip install --no-cache-dir uv && \
+        uv pip install --system --no-cache-dir .
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1
+    # Install requests for the wait script
+    RUN pip install --no-cache-dir requests
 
-# Default command for Prefect worker with retry mechanism
-CMD ["/app/scripts/start_prefect_worker.sh"]
+    # Copy source code last (changes frequently, so this layer rebuilds often)
+    COPY src/ ./src/
+    COPY alembic/ ./alembic/
+    COPY alembic.ini ./
+    COPY scripts/ ./scripts/
+
+    # Create logs directory
+    RUN mkdir -p /app/logs
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+        CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1
+
+    # Default command for Prefect worker with retry mechanism
+    CMD ["/app/scripts/start_prefect_worker.sh"]
