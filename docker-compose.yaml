@@ -63,6 +63,8 @@ services:
     env_file:
       - .env
     environment:
+      # Prefect uses asyncpg (async). Use ssl=true for SSL; sslmode is for psycopg2 only.
+      # If your password contains special characters, URL-encode it before placing in the DSN.
       - PREFECT_API_URL=http://localhost:4200/api
       - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
       # - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:${PREFECT_SUPABASE_PASSWORD}@db.${PREFECT_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require
@@ -91,7 +93,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile.api.optimized
     container_name: astrid-api-dev
     ports:
       - "8000:8000"
@@ -135,6 +137,8 @@ services:
     env_file:
       - .env
     environment:
+      # MLflow backend uses psycopg2 (sync). Use sslmode=require for Supabase connections.
+      # Artifact root comes from MLFLOW_ARTIFACT_ROOT; no --default-artifact-root flag needed.
       # Supabase credentials loaded from .env file
       - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -160,7 +164,7 @@ services:
   prefect-worker:
     build:
       context: .
-      dockerfile: Dockerfile.prefect
+      dockerfile: Dockerfile.prefect.optimized
     container_name: astrid-prefect-worker-dev
     restart: unless-stopped
     env_file:

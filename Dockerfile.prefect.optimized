@@ -1,0 +1,33 @@
+# ----- Base Stage with Heavy Dependencies -----
+FROM python:3.11-slim-bookworm AS base
+
+RUN apt-get update && apt-get install -y \
+    gcc g++ gfortran \
+    libopenblas-dev liblapack-dev libhdf5-dev libfftw3-dev libcfitsio-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+      numpy scipy matplotlib pandas scikit-learn astropy opencv-python-headless && \
+    pip install --no-cache-dir \
+      torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir mlflow boto3 aioboto3 dvc[ssh,s3] && \
+    rm -rf /root/.cache/pip
+
+# ----- Main Stage -----
+FROM base
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv && uv pip install --system --no-cache-dir .
+RUN pip install --no-cache-dir requests
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
+COPY scripts/ ./scripts/
+RUN mkdir -p /app/logs
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1
+CMD ["/app/scripts/start_prefect_worker.sh"]

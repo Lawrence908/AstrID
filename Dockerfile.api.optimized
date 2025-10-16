@@ -1,0 +1,49 @@
+# ----- Base Stage with Heavy Dependencies -----
+FROM python:3.11-slim-bookworm AS base
+
+RUN apt-get update && apt-get install -y \
+    gcc g++ gfortran \
+    libopenblas-dev liblapack-dev libhdf5-dev libfftw3-dev libcfitsio-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+      numpy scipy matplotlib pandas scikit-learn astropy opencv-python-headless && \
+    pip install --no-cache-dir \
+      torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir mlflow boto3 aioboto3 dvc[ssh,s3] && \
+    rm -rf /root/.cache/pip
+
+# ----- Builder Stage -----
+FROM base AS builder
+WORKDIR /build
+COPY pyproject.toml ./
+COPY README.md ./
+RUN pip install --no-cache-dir uv && \
+    uv pip install --no-cache-dir --system .
+
+# ----- Runtime Stage -----
+FROM python:3.11-slim-bookworm
+RUN adduser --disabled-password --gecos '' astrid
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    LOG_DIR=/app/logs
+RUN mkdir -p /app/logs && chown astrid:astrid /app/logs
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+COPY --from=base /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=base /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY src/ ./src/
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+RUN chown -R astrid:astrid /app
+USER astrid
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://127.0.0.1:8000/health || exit 1
+CMD ["uvicorn", "src.adapters.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
