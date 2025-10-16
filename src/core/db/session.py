@@ -21,6 +21,7 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
+import certifi
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -48,17 +49,34 @@ logger = logging.getLogger(__name__)
 # Create SSL context with proper verification
 ssl_context = None
 try:
+    # Priority: explicit DB config cert path -> SSL_CERT_FILE -> REQUESTS_CA_BUNDLE -> certifi
     cert_path = DB_CONFIG.get("ssl_cert_path")
+    env_ssl_cert_file = os.getenv("SSL_CERT_FILE")
+    env_requests_ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
     if cert_path and isinstance(cert_path, str) and os.path.exists(cert_path):
         logger.debug(f"Using SSL certificate at {cert_path}")
         ssl_context = ssl.create_default_context(cafile=cert_path)
         ssl_context.verify_mode = ssl.CERT_REQUIRED
         ssl_context.check_hostname = True
         logger.info("SSL context created successfully with certificate verification")
+    elif env_ssl_cert_file and os.path.exists(env_ssl_cert_file):
+        logger.info(f"Using SSL_CERT_FILE bundle at {env_ssl_cert_file}")
+        ssl_context = ssl.create_default_context(cafile=env_ssl_cert_file)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("SSL context created using SSL_CERT_FILE")
+    elif env_requests_ca_bundle and os.path.exists(env_requests_ca_bundle):
+        logger.info(f"Using REQUESTS_CA_BUNDLE at {env_requests_ca_bundle}")
+        ssl_context = ssl.create_default_context(cafile=env_requests_ca_bundle)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("SSL context created using REQUESTS_CA_BUNDLE")
     else:
-        logger.info("No SSL certificate path provided, using default SSL context")
-        ssl_context = ssl.create_default_context()
-        logger.info("Using default SSL context with system certificate store")
+        logger.info("No SSL certificate path provided, using certifi CA bundle")
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("Using certifi CA bundle for SSL verification")
 except Exception as e:
     logger.error(f"Failed to create SSL context: {str(e)}", exc_info=True)
     # Fallback to default SSL context
