@@ -9,6 +9,7 @@ echo "  AstrID Docker Aliases               - astrid-"
 # See all service URLs
 echo "   astrid-up      astrid-organizr       astrid-urls        astrid-status"
 echo "   astrid-logs    astrid-restart        astrid-build        astrid-prune"
+echo "   astrid-health  astrid-api-health     astrid-prefect-health   astrid-mlflow-health"
 
 
 
@@ -45,6 +46,13 @@ alias astrid-frontend-restart='docker-compose -p astrid-dev -f docker-compose.ya
 # Development helpers
 alias astrid-status='docker-compose -p astrid-dev -f docker-compose.yaml ps'
 alias astrid-health='curl -s http://127.0.0.1:8000/health | jq .'
+alias astrid-api-health='docker-compose -p astrid-dev -f docker-compose.yaml exec api curl -sf http://127.0.0.1:8000/health || echo "API unhealthy"'
+alias astrid-prefect-health='docker-compose -p astrid-dev -f docker-compose.yaml exec prefect curl -sf http://localhost:4200/health || echo "Prefect unhealthy"'
+alias astrid-mlflow-health='docker-compose -p astrid-dev -f docker-compose.yaml exec mlflow python -c "import requests; print(requests.get('http://localhost:5000/health').status_code)" || echo "MLflow unhealthy"'
+
+alias astrid-restart-api='docker-compose -p astrid-dev -f docker-compose.yaml restart api && docker-compose -p astrid-dev -f docker-compose.yaml logs -f api'
+alias astrid-restart-prefect='docker-compose -p astrid-dev -f docker-compose.yaml restart prefect && docker-compose -p astrid-dev -f docker-compose.yaml logs -f prefect'
+alias astrid-restart-mlflow='docker-compose -p astrid-dev -f docker-compose.yaml restart mlflow && docker-compose -p astrid-dev -f docker-compose.yaml logs -f mlflow'
 alias astrid-frontend='open http://localhost:3010'
 alias astrid-api-docs='open http://127.0.0.1:8000/docs'
 alias astrid-mlflow='open http://localhost:5000'
