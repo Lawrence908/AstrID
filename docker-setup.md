@@ -15,7 +15,7 @@ This directory contains the Docker configuration for AstrID development environm
 ./docker/start-dev.sh --down
 
 # Access Organizr dashboard (unified interface for all services)
-open http://localhost:8080
+open http://localhost:8081
 ```
 
 ## Delete Everything
@@ -33,7 +33,7 @@ sudo docker system prune -a --volumes
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **Organizr** | **8080** | **Unified dashboard for all services** |
+| **Organizr** | **8081** | **Unified dashboard for all services** |
 | Frontend | 3010 | Next.js planning dashboard with hot reload |
 | API | 8000 | FastAPI application with hot reload |
 | MLflow | 5000 | ML experiment tracking |

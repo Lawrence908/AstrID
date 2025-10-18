@@ -30,7 +30,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker.optimized
+      dockerfile: Dockerfile.worker
     # Keep volume mounts for development
     volumes:
       - .:/app

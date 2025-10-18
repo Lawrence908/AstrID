@@ -39,7 +39,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=auto
     ports:
-      - "5000:5000"
+      - "9003:5000"
     volumes:
       - ./certs:/app/certs
     networks:
@@ -59,13 +59,13 @@ services:
     image: python:3.11-slim
     container_name: astrid-prefect-dev
     ports:
-      - "4200:4200"
+      - "9004:4200"
     env_file:
       - .env
     environment:
       # Prefect uses asyncpg (async). Use ssl=true for SSL; sslmode is for psycopg2 only.
       # If your password contains special characters, URL-encode it before placing in the DSN.
-      - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_API_URL=http://localhost:9004/api
       - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
       # - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:${PREFECT_SUPABASE_PASSWORD}@db.${PREFECT_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
@@ -96,7 +96,7 @@ services:
       dockerfile: Dockerfile.api.optimized
     container_name: astrid-api-dev
     ports:
-      - "8000:8000"
+      - "9001:8000"
     env_file:
       - .env
     environment:
@@ -207,10 +207,10 @@ services:
       dockerfile: Dockerfile.dev
     container_name: astrid-frontend-dev
     ports:
-      - "3010:3010"
+      - "9002:3010"
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:9001
       - PORT=3010
     volumes:
       - ./frontend:/app
@@ -229,7 +229,7 @@ services:
     image: organizr/organizr:latest
     container_name: astrid-organizr-dev
     ports:
-      - "8080:80"
+      - "9000:80"
     environment:
       - PUID=1000
       - PGID=1000

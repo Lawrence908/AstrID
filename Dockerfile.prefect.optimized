@@ -21,9 +21,10 @@ FROM base
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
+COPY README.md ./
+COPY src/ ./src/
 RUN pip install --no-cache-dir uv && uv pip install --system --no-cache-dir .
 RUN pip install --no-cache-dir requests
-COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY scripts/ ./scripts/
