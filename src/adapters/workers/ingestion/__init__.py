@@ -1,0 +1,1 @@
+"""Observation ingestion workers module."""

@@ -45,9 +45,22 @@ repos:
       # Python specific
       - id: check-ast
       - id: check-docstring-first
+        exclude: |
+          (?x)^
+          (
+            frontend/public/docs/.*\.py$
+          )
       - id: debug-statements
       - id: name-tests-test
-        args: [--pytest-test-first]
+        args:
+          - --pytest-test-first
+        exclude: |
+          (?x)^(
+            tests/fixtures/.*|
+            tests/mocks/.*|
+            tests/scripts/.*|
+            tests/utils.py
+          )$
 
       # Security
       - id: detect-private-key

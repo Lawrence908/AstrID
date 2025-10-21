@@ -6,9 +6,15 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync-docs": "rsync -av --delete ../docs/ ./public/docs/ --exclude '.git/' --exclude '.DS_Store' --exclude 'meetings/' --exclude 'api/' --exclude 'viu/' --exclude 'guides/'",
+    "predev": "npm run sync-docs",
+    "prebuild": "npm run sync-docs"
   },
   "dependencies": {
+    "@supabase/auth-ui-react": "^0.4.7",
+    "@supabase/auth-ui-shared": "^0.1.8",
+    "@supabase/supabase-js": "^2.57.4",
     "@tailwindcss/typography": "^0.5.16",
     "clsx": "^2.0.0",
     "lucide-react": "^0.294.0",
@@ -18,6 +24,10 @@
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.0",
     "tailwind-merge": "^2.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",

@@ -1,0 +1,42 @@
+name: Notebooks Tier 1 (PR)
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  nb-tier1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies (dev)
+        run: |
+          uv pip install --system --dev . nbmake
+
+      - name: Run Tier 1 notebooks with nbmake
+        run: |
+          pytest --nbmake \
+            notebooks/astr92_testing.ipynb \
+            notebooks/astr81_testing.ipynb \
+            --nbmake-timeout=900 -q
+
+      - name: Upload notebook artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nb-tier1-logs
+          path: |
+            ./.ipynb_checkpoints
+            ./logs

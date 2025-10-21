@@ -1,0 +1,46 @@
+name: Notebooks Tier 2 (Nightly)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  nb-tier2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies (dev)
+        run: |
+          uv pip install --system --dev . nbmake
+
+      - name: Run Tier 2 notebooks with nbmake (longer timeout)
+        env:
+          SKIP_SLOW: '1'
+        run: |
+          pytest --nbmake \
+            notebooks/astr76_testing.ipynb \
+            notebooks/astr79_testing.ipynb \
+            notebooks/astr84_testing.ipynb \
+            notebooks/astr75_testing.ipynb \
+            --nbmake-timeout=1800 -q
+
+      - name: Upload notebook artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nb-tier2-logs
+          path: |
+            ./.ipynb_checkpoints
+            ./logs

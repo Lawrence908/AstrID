@@ -25,7 +25,7 @@ from src.core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])
 
 
 def safe_datetime_convert(dt_str_or_obj):

@@ -1,6 +1,6 @@
 """James Webb Space Telescope (JWST) data adapter."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -330,9 +330,9 @@ class JWSTAdapter(SurveyAdapter):
         if time_mjd is None:
             raise ValueError("Missing JWST observation time")
 
-        # Convert MJD to datetime
+        # Convert MJD to datetime (UTC)
         timestamp = (float(time_mjd) - 2440587.5) * 86400.0
-        return datetime.fromtimestamp(timestamp)
+        return datetime.fromtimestamp(timestamp, tz=UTC)
 
     def _extract_filter_band(self, raw_data: dict[str, Any]) -> str:
         """Extract and normalize filter band."""

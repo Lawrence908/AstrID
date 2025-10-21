@@ -15,12 +15,18 @@ from alembic import context
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Import your database models and configuration
+from src.adapters.auth.models import APIKey
 from src.core.constants import get_database_url
 from src.core.db.session import Base
 from src.domains.catalog.models import SystemConfig
 from src.domains.curation.models import Alert, ValidationEvent
 from src.domains.detection.models import Detection, Model, ModelRun
 from src.domains.differencing.models import Candidate, DifferenceRun
+from src.domains.ml.training_data.models import (
+    TrainingDataset,
+    TrainingRun,
+    TrainingSample,
+)
 from src.domains.observations.models import Observation, Survey
 from src.domains.preprocessing.models import PreprocessRun
 
@@ -56,8 +62,13 @@ _ = [
     Candidate,
     # Preprocessing domain
     PreprocessRun,
+    # ML Training Data domain
+    TrainingDataset,
+    TrainingSample,
+    TrainingRun,
     # Catalog domain
     SystemConfig,
+    APIKey,
 ]
 
 # add your model's MetaData object here
@@ -66,8 +77,12 @@ target_metadata = Base.metadata
 
 # Debug print to see what tables are registered
 print("Registered tables in metadata:")
-for table in Base.metadata.sorted_tables:
-    print(f"- {table.name} (schema: {table.schema})")
+try:
+    for table in Base.metadata.sorted_tables:
+        print(f"- {table.name} (schema: {table.schema})")
+except Exception as e:
+    print(f"Error listing tables: {e}")
+    # Continue without the debug print
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

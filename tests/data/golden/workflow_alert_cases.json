@@ -1,0 +1,10 @@
+{
+  "duration_alerts": [
+    {"duration": 305.0, "threshold": 300.0, "should_alert": true},
+    {"duration": 299.5, "threshold": 300.0, "should_alert": false}
+  ],
+  "status_alerts": [
+    {"status": "FAILED", "should_alert": true},
+    {"status": "COMPLETED", "should_alert": false}
+  ]
+}

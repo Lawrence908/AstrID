@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from src.adapters.auth.api_key_auth import require_permission_or_api_key
 from src.adapters.auth.rbac import (
     Permission,
     UserWithRole,
@@ -84,9 +85,7 @@ class CandidateResponse(BaseModel):
 async def create_difference_run(
     run: DifferenceRunCreate,
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ) -> ResponseEnvelope[DifferenceRunResponse]:
     """Create a new difference run."""
     try:
@@ -172,9 +171,7 @@ async def run_differencing(
     observation_id: str = Query(..., description="Observation ID to process"),
     algorithm: str = Query("zogy", description="Differencing algorithm to use"),
     db=Depends(get_db),
-    current_user: UserWithRole = Depends(
-        require_permission(Permission.MANAGE_OPERATIONS)
-    ),
+    auth=Depends(require_permission_or_api_key(Permission.MANAGE_OPERATIONS)),
 ):
     """Run differencing algorithm on an observation."""
     try:

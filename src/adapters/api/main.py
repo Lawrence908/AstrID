@@ -5,12 +5,17 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC
 
+import redis.asyncio as redis
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.adapters.api.routes import auth, health, storage, stream
+from src.adapters.api.docs import create_openapi_schema
+from src.adapters.api.rate_limiting import RATE_LIMITS, RateLimitingMiddleware
+from src.adapters.api.routes import api_keys, auth, health, mlflow, storage, stream
+from src.adapters.api.routes.workers import router as workers_router
+from src.adapters.api.versioning import APIVersioningMiddleware
 from src.core.api.response_wrapper import create_response
 from src.core.constants import (
     API_DESCRIPTION,
@@ -21,14 +26,17 @@ from src.core.constants import (
     CORS_ALLOW_METHODS,
     CORS_ORIGINS,
     ENVIRONMENT,
+    REDIS_URL,
 )
 from src.core.exceptions import AstrIDException
 from src.domains.catalog.api.routes import router as catalog_router
 from src.domains.curation.api.routes import router as curation_router
 from src.domains.detection.api.routes import router as detections_router
 from src.domains.differencing.api.routes import router as differencing_router
+from src.domains.ml.training_data.api import router as training_router
 from src.domains.observations.api.routes import router as observations_router
 from src.domains.preprocessing.api.routes import router as preprocessing_router
+from src.infrastructure.workflow.api import router as workflow_router
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -41,7 +49,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("Starting AstrID API...")
     try:
-        # Add any startup logic here (database connections, background services, etc.)
+        # Initialize Redis connection for rate limiting
+        redis_client = redis.from_url(REDIS_URL)
+        app.state.redis_client = redis_client
+
+        # Test Redis connection
+        await redis_client.ping()
+        logger.info("Redis connection established for rate limiting")
+
         logger.info("AstrID API startup completed successfully")
     except Exception as e:
         logger.error(f"Failed to start AstrID API: {str(e)}")
@@ -52,7 +67,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     logger.info("Shutting down AstrID API...")
     try:
-        # Add any cleanup logic here (close connections, stop services, etc.)
+        # Close Redis connection
+        if hasattr(app.state, "redis_client"):
+            await app.state.redis_client.close()
+            logger.info("Redis connection closed")
+
         logger.info("AstrID API shutdown completed successfully")
     except Exception as e:
         logger.error(f"Error during AstrID API shutdown: {str(e)}")
@@ -71,8 +90,23 @@ app = FastAPI(
         "displayRequestDuration": True,
         "filter": True,
         "syntaxHighlight": {"theme": "monokai"},
+        "tryItOutEnabled": True,
+        "requestSnippetsEnabled": True,
+        "requestSnippets": {
+            "generators": {
+                "curl_bash": {"title": "cURL (bash)", "syntax": "bash"},
+                "curl_powershell": {
+                    "title": "cURL (PowerShell)",
+                    "syntax": "powershell",
+                },
+                "curl_cmd": {"title": "cURL (CMD)", "syntax": "bash"},
+            }
+        },
     },
 )
+
+# Override OpenAPI schema with comprehensive documentation
+app.openapi = lambda: create_openapi_schema(app)
 
 # Add CORS middleware
 app.add_middleware(
@@ -82,6 +116,12 @@ app.add_middleware(
     allow_methods=CORS_ALLOW_METHODS,
     allow_headers=CORS_ALLOW_HEADERS,
 )
+
+# Add API versioning middleware
+app.add_middleware(APIVersioningMiddleware, default_version="v1")
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitingMiddleware, default_limits=RATE_LIMITS)
 
 
 # Exception handlers
@@ -180,6 +220,9 @@ async def validation_exception_handler(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(api_keys.router)
+app.include_router(api_keys.router)
+
 app.include_router(observations_router, prefix="/observations", tags=["observations"])
 app.include_router(detections_router, prefix="/detections", tags=["detections"])
 app.include_router(curation_router, prefix="/curation", tags=["curation"])
@@ -188,9 +231,13 @@ app.include_router(catalog_router, prefix="/catalog", tags=["catalog"])
 app.include_router(
     preprocessing_router, prefix="/preprocessing", tags=["preprocessing"]
 )
+app.include_router(workflow_router, tags=["workflows"])
 app.include_router(stream.router, prefix="/stream", tags=["stream"])
 app.include_router(storage.router, prefix="/storage", tags=["storage"])
+app.include_router(mlflow.router, tags=["mlflow"])
 app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(workers_router, prefix="/workers", tags=["workers"])
+app.include_router(training_router, tags=["training"])
 
 
 @app.get("/")  # type: ignore[misc]

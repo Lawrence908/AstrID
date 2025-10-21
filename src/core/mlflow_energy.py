@@ -75,6 +75,18 @@ class MLflowEnergyTracker:
                         self._log_performance_metrics(performance_metrics)
                 return run_id
             else:
+                # If a run is already active, log to it directly to avoid conflicts
+                active = mlflow.active_run()
+                if active is not None:
+                    self._log_energy_metrics(
+                        energy_consumption, model_version, "training"
+                    )
+                    if model_params:
+                        self._log_model_params(model_params)
+                    if performance_metrics:
+                        self._log_performance_metrics(performance_metrics)
+                    return active.info.run_id
+
                 with mlflow.start_run() as run:
                     self._log_energy_metrics(
                         energy_consumption, model_version, "training"
@@ -184,10 +196,15 @@ class MLflowEnergyTracker:
         mlflow.set_tag("stage", stage)
         mlflow.set_tag("model_version", model_version)
 
+        carbon_fmt = (
+            f"{energy_consumption.carbon_footprint_kg:.6f} kg CO2"
+            if energy_consumption.carbon_footprint_kg is not None
+            else "N/A"
+        )
         logger.info(
             f"Logged {stage} energy metrics to MLflow: "
             f"{energy_consumption.total_energy_wh:.3f} Wh, "
-            f"{energy_consumption.carbon_footprint_kg:.6f} kg CO2"
+            f"{carbon_fmt}"
         )
 
     def _log_model_params(self, model_params: dict[str, Any]) -> None:
@@ -207,13 +224,18 @@ class MLflowEnergyTracker:
         self, energy_consumption: EnergyConsumption, model_version: str, stage: str
     ) -> None:
         """Log energy metrics locally when MLflow is not available."""
+        carbon_fmt = (
+            f"{energy_consumption.carbon_footprint_kg:.6f} kg CO2"
+            if energy_consumption.carbon_footprint_kg is not None
+            else "N/A"
+        )
         logger.info(
             f"Local energy log [{stage}] - Model: {model_version}, "
             f"Energy: {energy_consumption.total_energy_wh:.3f} Wh, "
             f"Avg Power: {energy_consumption.average_power_watts:.1f} W, "
             f"Peak Power: {energy_consumption.peak_power_watts:.1f} W, "
             f"Duration: {energy_consumption.duration_seconds:.1f}s, "
-            f"Carbon: {energy_consumption.carbon_footprint_kg:.6f} kg CO2"
+            f"Carbon: {carbon_fmt}"
         )
 
 

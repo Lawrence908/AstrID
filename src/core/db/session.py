@@ -21,6 +21,7 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
+import certifi
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -48,20 +49,39 @@ logger = logging.getLogger(__name__)
 # Create SSL context with proper verification
 ssl_context = None
 try:
+    # Priority: explicit DB config cert path -> SSL_CERT_FILE -> REQUESTS_CA_BUNDLE -> certifi
     cert_path = DB_CONFIG.get("ssl_cert_path")
+    env_ssl_cert_file = os.getenv("SSL_CERT_FILE")
+    env_requests_ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
     if cert_path and isinstance(cert_path, str) and os.path.exists(cert_path):
         logger.debug(f"Using SSL certificate at {cert_path}")
         ssl_context = ssl.create_default_context(cafile=cert_path)
         ssl_context.verify_mode = ssl.CERT_REQUIRED
         ssl_context.check_hostname = True
-        logger.info("SSL context created successfully")
+        logger.info("SSL context created successfully with certificate verification")
+    elif env_ssl_cert_file and os.path.exists(env_ssl_cert_file):
+        logger.info(f"Using SSL_CERT_FILE bundle at {env_ssl_cert_file}")
+        ssl_context = ssl.create_default_context(cafile=env_ssl_cert_file)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("SSL context created using SSL_CERT_FILE")
+    elif env_requests_ca_bundle and os.path.exists(env_requests_ca_bundle):
+        logger.info(f"Using REQUESTS_CA_BUNDLE at {env_requests_ca_bundle}")
+        ssl_context = ssl.create_default_context(cafile=env_requests_ca_bundle)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("SSL context created using REQUESTS_CA_BUNDLE")
     else:
-        logger.info("No SSL certificate path provided, using default SSL context")
-        ssl_context = ssl.create_default_context()
+        logger.info("No SSL certificate path provided, using certifi CA bundle")
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = True
+        logger.info("Using certifi CA bundle for SSL verification")
 except Exception as e:
     logger.error(f"Failed to create SSL context: {str(e)}", exc_info=True)
     # Fallback to default SSL context
     ssl_context = ssl.create_default_context()
+    logger.warning("Using fallback SSL context due to error")
 
 # Create async engine with SSL context and connection pooling
 try:
@@ -92,6 +112,7 @@ try:
                 "application_name": "astrid_app",
                 "client_encoding": "utf8",
                 "timezone": "UTC",
+                "search_path": "public",
             },
         },
     )
@@ -112,16 +133,50 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that provides an async database session."""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception as e:
-            logger.error(f"Database session error: {str(e)}", exc_info=True)
+    """FastAPI dependency that provides an async database session.
+
+    Includes connection pool monitoring and proper error handling for Supabase limits.
+    """
+    session = None
+    try:
+        # Log pool status before creating session
+        logger.debug("Creating database session")
+
+        session = AsyncSessionLocal()
+        # Test connection before yielding
+        await session.execute(text("SELECT 1"))
+        yield session
+    except Exception as e:
+        logger.error(f"Database session error: {str(e)}", exc_info=True)
+        if session:
             await session.rollback()
-            raise
-        finally:
+        # Check if it's a connection pool exhaustion error
+        if "MaxClientsInSessionMode" in str(e) or "max clients reached" in str(e):
+            logger.warning(
+                "Supabase connection pool exhausted - consider reducing pool sizes"
+            )
+            # Log current pool status for debugging
+            logger.warning("Connection pool may be exhausted - check Supabase limits")
+        raise
+    finally:
+        if session:
             await session.close()
+
+
+async def get_pool_health() -> dict[str, Any]:
+    """Get connection pool health status for monitoring."""
+    try:
+        # Test connection to verify pool health
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            return {"status": "healthy", "message": "Database connection successful"}
+    except Exception as e:
+        logger.error(f"Failed to get pool health: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "message": "Database connection failed",
+        }
 
 
 async def get_test_db() -> AsyncGenerator[AsyncSession, None]:
@@ -213,9 +268,9 @@ async def check_pool_health() -> dict[str, Any]:
         # Get pool statistics
         pool = engine.pool
         stats = {
-            "pool_size": pool.size(),
-            "overflow": pool.overflow(),
-            "checkedout": pool.checkedout(),
+            "pool_size": getattr(pool, "size", lambda: 0)(),
+            "overflow": getattr(pool, "overflow", lambda: 0)(),
+            "checkedout": getattr(pool, "checkedout", lambda: 0)(),
         }
 
         # Test getting a connection
@@ -231,6 +286,43 @@ async def check_pool_health() -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Pool health check failed: {str(e)}")
+        # Check for Supabase-specific connection errors
+        if "MaxClientsInSessionMode" in str(e) or "max clients reached" in str(e):
+            logger.warning(
+                "Supabase connection pool exhausted - consider reducing pool sizes"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Database connection pool exhausted. Please try again later.",
+            ) from e
         raise HTTPException(
             status_code=503, detail=f"Database pool health check failed: {str(e)}"
         ) from e
+
+
+async def get_connection_pool_status() -> dict[str, Any]:
+    """Get current connection pool status for monitoring.
+
+    Returns:
+        dict: Pool status including size, checked out connections, and overflow
+    """
+    try:
+        pool = engine.pool
+        pool_size = getattr(pool, "size", lambda: 0)()
+        overflow = getattr(pool, "overflow", lambda: 0)()
+        checked_out = getattr(pool, "checkedout", lambda: 0)()
+        checked_in = getattr(pool, "checkedin", lambda: 0)()
+
+        return {
+            "pool_size": pool_size,
+            "checked_out": checked_out,
+            "overflow": overflow,
+            "checked_in": checked_in,
+            "total_connections": pool_size + overflow,
+            "status": "healthy"
+            if checked_out < (pool_size + overflow)
+            else "exhausted",
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pool status: {str(e)}")
+        return {"error": str(e), "status": "error"}

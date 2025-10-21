@@ -33,18 +33,19 @@ services:
     env_file:
       - .env
     environment:
-      # MLflow uses psycopg (sync driver) while main app uses asyncpg (async driver)
       - MLFLOW_ARTIFACT_ROOT=s3://astrid-models
       - MLFLOW_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=auto
     ports:
-      - "5000:5000"
+      - "9003:5000"
+    volumes:
+      - ./certs:/app/certs
     networks:
       - astrid-network
     command: >
-      bash -c "pip install psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$$MLFLOW_SUPABASE_PROJECT_REF:$$MLFLOW_SUPABASE_PASSWORD@$$MLFLOW_SUPABASE_HOST/postgres --default-artifact-root s3://astrid-models --gunicorn-opts '--timeout 120'"
+      bash -lc "pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql+psycopg2://postgres.$MLFLOW_SUPABASE_PROJECT_REF:$MLFLOW_SUPABASE_PASSWORD@$MLFLOW_SUPABASE_HOST/postgres?connect_timeout=10 --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"
     # Using Supabase PostgreSQL
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -58,21 +59,27 @@ services:
     image: python:3.11-slim
     container_name: astrid-prefect-dev
     ports:
-      - "4200:4200"
+      - "9004:4200"
     env_file:
       - .env
     environment:
-      - PREFECT_API_URL=http://localhost:4200/api
-      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres
+      # Prefect uses asyncpg (async). Use ssl=true for SSL; sslmode is for psycopg2 only.
+      # If your password contains special characters, URL-encode it before placing in the DSN.
+      - PREFECT_API_URL=http://localhost:9004/api
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
+      # - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:${PREFECT_SUPABASE_PASSWORD}@db.${PREFECT_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+      - PREFECT_SUPABASE_SSL_CERT_PATH=/app/certs/prod-ca-2021.crt
+    volumes:
+      - ./certs:/app/certs
     networks:
       - astrid-network
     command: >
       bash -c "
-        apt-get update && apt-get install -y curl &&
-        pip install 'prefect[postgres]>=2.14.0' &&
+        apt-get update && apt-get install -y curl ca-certificates &&
+        pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org 'prefect[postgres]>=2.14.0' &&
         prefect server start --host 0.0.0.0 --port 4200
       "
     healthcheck:
@@ -86,10 +93,10 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile.api.optimized
     container_name: astrid-api-dev
     ports:
-      - "8000:8000"
+      - "9001:8000"
     env_file:
       - .env
     environment:
@@ -115,7 +122,7 @@ services:
         condition: service_healthy
     command: python -m uvicorn src.adapters.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 300s # Set to 30s later in development
       timeout: 10s
       retries: 3
@@ -130,6 +137,8 @@ services:
     env_file:
       - .env
     environment:
+      # MLflow backend uses psycopg2 (sync). Use sslmode=require for Supabase connections.
+      # Artifact root comes from MLFLOW_ARTIFACT_ROOT; no --default-artifact-root flag needed.
       # Supabase credentials loaded from .env file
       - REDIS_URL=redis://:${REDIS_PASSWORD:-foo}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -149,13 +158,13 @@ services:
         condition: service_healthy
       mlflow:
         condition: service_healthy
-    command: ["dramatiq", "-p", "4", "-t", "1", "src.adapters.workers.tasks"]
+    command: ["dramatiq", "-p", "1", "-t", "1", "src.adapters.workers.tasks"]
 
   # Prefect Worker
   prefect-worker:
     build:
       context: .
-      dockerfile: Dockerfile.prefect
+      dockerfile: Dockerfile.prefect.optimized
     container_name: astrid-prefect-worker-dev
     restart: unless-stopped
     env_file:
@@ -163,6 +172,7 @@ services:
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
       - PREFECT_WORK_POOL_NAME=astrid-pool
+      - PREFECT_EVENTS_CLIENT_DISABLE=true
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
       - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
@@ -180,6 +190,7 @@ services:
       - .:/app
       - ./src:/app/src
       - ./logs:/app/logs
+      - ./certs:/app/certs
     networks:
       - astrid-network
     depends_on:
@@ -196,10 +207,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: astrid-frontend-dev
     ports:
-      - "3000:3000"
+      - "9002:3010"
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:9001
+      - PORT=3010
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -209,18 +221,34 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    command: >
-      sh -c "
-        # Fix ownership of the app directory and ensure nextjs user can write
-        chown -R nextjs:nodejs /app &&
-        chmod -R 755 /app &&
-        # Switch to nextjs user and start the development server
-        su-exec nextjs npm run dev
-      "
-    user: "0:0"  # Run as root initially to fix permissions
+    command: ["npx", "next", "dev", "-p", "3010"]
+    user: "${UID}:${GID}"
+
+  # Organizr - Unified Dashboard for all services
+  organizr:
+    image: organizr/organizr:latest
+    container_name: astrid-organizr-dev
+    ports:
+      - "9000:80"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - organizr_config:/config
+    networks:
+      - astrid-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   redis_data:
+  organizr_config:
 
 networks:
   astrid-network:

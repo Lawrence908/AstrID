@@ -619,23 +619,23 @@ class ProcessingJobStatus(str, Enum):
 
 ## Implementation Status
 
-### ✅ Completed Models
+###  Completed Models
 All models from the original schema design have been implemented:
 
-1. **✅ Core entities**: `Survey`, `Observation` (observations domain)
-2. **✅ Processing pipeline**: `PreprocessRun` (preprocessing domain), `DifferenceRun`, `Candidate` (differencing domain)
-3. **✅ ML integration**: `Model`, `ModelRun`, `Detection` (detection domain)
-4. **✅ Validation and curation**: `ValidationEvent`, `Alert` (curation domain)
-5. **✅ System tables**: `SystemConfig`, `ProcessingJob`, `AuditLog` (catalog domain)
+1. ** Core entities**: `Survey`, `Observation` (observations domain)
+2. ** Processing pipeline**: `PreprocessRun` (preprocessing domain), `DifferenceRun`, `Candidate` (differencing domain)
+3. ** ML integration**: `Model`, `ModelRun`, `Detection` (detection domain)
+4. ** Validation and curation**: `ValidationEvent`, `Alert` (curation domain)
+5. ** System tables**: `SystemConfig`, `ProcessingJob`, `AuditLog` (catalog domain)
 
-### 🔄 Migration Strategy
+###  Migration Strategy
 The models are ready for database migration using Alembic:
 
-1. **Phase 1**: Core entities (surveys, observations) - ✅ Ready
-2. **Phase 2**: Processing pipeline (preprocess_runs, difference_runs, candidates) - ✅ Ready
-3. **Phase 3**: ML integration (models, model_runs, detections) - ✅ Ready
-4. **Phase 4**: Validation and curation (validation_events, alerts) - ✅ Ready
-5. **Phase 5**: System tables (processing_jobs, audit_log, system_config) - ✅ Ready
+1. **Phase 1**: Core entities (surveys, observations) -  Ready
+2. **Phase 2**: Processing pipeline (preprocess_runs, difference_runs, candidates) -  Ready
+3. **Phase 3**: ML integration (models, model_runs, detections) -  Ready
+4. **Phase 4**: Validation and curation (validation_events, alerts) -  Ready
+5. **Phase 5**: System tables (processing_jobs, audit_log, system_config) -  Ready
 
 ### 📋 Next Steps
 1. Generate Alembic migrations for all models

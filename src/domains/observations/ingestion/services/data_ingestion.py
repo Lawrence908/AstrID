@@ -13,13 +13,15 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.wcs import WCS
 
-from src.adapters.external import MASTClient, R2StorageClient, SkyViewClient
+from src.adapters.external import MASTClient, SkyViewClient
 from src.adapters.imaging.fits_io import FITSProcessor
 from src.core.logging import configure_domain_logger
 from src.domains.observations.ingestion.processors import CoordinateProcessor
 from src.domains.observations.schema import ObservationCreate
 from src.domains.observations.survey_config import SurveyConfigurationRead
 from src.domains.observations.survey_config_service import SurveyConfigurationService
+from src.infrastructure.storage.config import StorageConfig
+from src.infrastructure.storage.r2_client import R2StorageClient
 
 
 class DataIngestionService:
@@ -31,6 +33,7 @@ class DataIngestionService:
         skyview_client: SkyViewClient | None = None,
         r2_client: R2StorageClient | None = None,
         survey_config_service: SurveyConfigurationService | None = None,
+        storage_config: StorageConfig | None = None,
     ):
         """Initialize the data ingestion service.
 
@@ -39,13 +42,26 @@ class DataIngestionService:
             skyview_client: SkyView client for reference images
             r2_client: R2 storage client for file storage
             survey_config_service: Service for managing survey configurations
+            storage_config: Storage configuration for R2 client
         """
         self.logger = configure_domain_logger("observations.ingestion")
 
         # Initialize external adapters (dependency injection)
         self.mast_client = mast_client or MASTClient()
         self.skyview_client = skyview_client or SkyViewClient()
-        self.r2_client = r2_client or R2StorageClient()
+
+        # Initialize R2 client with proper configuration
+        if r2_client is not None:
+            self.r2_client = r2_client
+            self.logger.info("Using provided R2 client")
+        else:
+            # Use provided config or create from environment
+            config = storage_config or StorageConfig.from_env()
+            self.r2_client = R2StorageClient(config=config)
+            self.logger.info(
+                f"Initialized R2 client with config: verify_ssl={config.r2_verify_ssl}, ca_bundle={config.r2_ca_bundle}"
+            )
+
         self.survey_config_service = survey_config_service
 
         # Initialize processors
@@ -253,11 +269,11 @@ class DataIngestionService:
         surveys: list[str] | None = None,
         catalog: str = "II/246",  # 2MASS catalog
         output_dir: str | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """Create a complete reference dataset with image, catalog, and mask.
 
         This recreates the functionality from dataGathering.py createStarDataset function
-        using the new architecture with external adapters.
+        using the new architecture with external adapters and R2 storage.
 
         Args:
             ra: Right Ascension in degrees
@@ -269,7 +285,7 @@ class DataIngestionService:
             output_dir: Output directory (creates temp if None)
 
         Returns:
-            Path to the created FITS file
+            Dictionary with R2 storage information and metadata
         """
         self.logger.info(f"Creating reference dataset for RA={ra:.4f}°, Dec={dec:.4f}°")
 
@@ -277,7 +293,7 @@ class DataIngestionService:
             surveys = ["DSS"]
 
         try:
-            # Create temporary directory if needed
+            # Create temporary directory for local processing
             if output_dir is None:
                 output_dir = tempfile.mkdtemp(prefix="astrid_reference_")
             else:
@@ -304,9 +320,9 @@ class DataIngestionService:
             # TODO: Implement VizierClient integration
             # star_catalog = self._create_mock_star_catalog(ra, dec, size)  # Will be used for complete FITS
 
-            # Create complete FITS file
+            # Create complete FITS file locally first
             output_filename = f"reference_{ra:.4f}_{dec:.4f}.fits"
-            output_path = str(Path(output_dir) / output_filename)
+            local_output_path = str(Path(output_dir) / output_filename)
 
             # Create mock image data for now
             mock_image = np.random.normal(1000, 100, (pixels, pixels)).astype(
@@ -317,13 +333,82 @@ class DataIngestionService:
             # For now, create a basic FITS file using the lightweight processor
             # TODO: Integrate with preprocessing domain for complete FITS creation
 
-            # Save basic FITS file with image and WCS
+            # Save basic FITS file with image and WCS locally
             self.fits_processor.save_fits(
-                data=mock_image, header=wcs.to_header(), file_path=output_path
+                data=mock_image, header=wcs.to_header(), file_path=local_output_path
             )
 
-            self.logger.info(f"Created reference dataset: {output_path}")
-            return output_path
+            # Upload to R2 storage
+            try:
+                # Generate R2 object key with organized structure
+                object_key = f"reference-datasets/{surveys[0].replace(' ', '_')}/{ra:.4f}_{dec:.4f}_{size:.3f}deg_{pixels}px.fits"
+
+                # Prepare metadata for R2
+                metadata = {
+                    "ra": str(ra),
+                    "dec": str(dec),
+                    "size_degrees": str(size),
+                    "pixels": str(pixels),
+                    "surveys": ",".join(surveys),
+                    "catalog": catalog,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "file_type": "reference_dataset",
+                }
+
+                self.logger.info(
+                    f"Attempting R2 upload: bucket={self.r2_client.bucket_name}, key={object_key}"
+                )
+                self.logger.info(
+                    f"R2 client config: verify_ssl={getattr(self.r2_client, '_verify_ssl', 'unknown')}"
+                )
+
+                # Upload to R2
+                await self.r2_client.upload_file(
+                    bucket=self.r2_client.bucket_name,
+                    key=object_key,
+                    data=local_output_path,
+                    content_type="application/fits",
+                    metadata=metadata,
+                )
+
+                # Generate presigned URL for the uploaded file (valid for 24 hours)
+                r2_url = await self.r2_client.generate_presigned_url(
+                    bucket=self.r2_client.bucket_name,
+                    key=object_key,
+                    expiration=86400,  # 24 hours
+                )
+
+                self.logger.info(f"Uploaded reference dataset to R2: {object_key}")
+
+                # Clean up local temporary file
+                Path(local_output_path).unlink(missing_ok=True)
+                Path(output_dir).rmdir()
+
+                return {
+                    "r2_object_key": object_key,
+                    "r2_url": r2_url,
+                    "bucket": self.r2_client.bucket_name,
+                    "local_path": local_output_path,  # For backward compatibility
+                    "ra": ra,
+                    "dec": dec,
+                    "size_degrees": size,
+                    "pixels": pixels,
+                    "surveys": surveys,
+                    "metadata": metadata,
+                }
+
+            except Exception as r2_error:
+                self.logger.error(f"Failed to upload to R2: {r2_error}")
+                # Return local path as fallback
+                return {
+                    "local_path": local_output_path,
+                    "ra": ra,
+                    "dec": dec,
+                    "size_degrees": size,
+                    "pixels": pixels,
+                    "surveys": surveys,
+                    "error": f"R2 upload failed: {str(r2_error)}",
+                }
 
         except Exception as e:
             self.logger.error(f"Failed to create reference dataset: {e}")

@@ -4,6 +4,14 @@
 # Source this file in your shell: source astrid-aliases.sh
 
 echo "  AstrID Docker Aliases               - astrid-"
+# Start everything (including Organizr)
+# Access the unified dashboard
+# See all service URLs
+echo "   astrid-up      astrid-organizr       astrid-urls        astrid-status"
+echo "   astrid-logs    astrid-restart        astrid-build        astrid-prune"
+echo "   astrid-health  astrid-api-health     astrid-prefect-health   astrid-mlflow-health"
+
+
 
 # Core service management
 alias astrid-up='docker-compose -p astrid-dev -f docker-compose.yaml up -d'
@@ -21,6 +29,7 @@ alias astrid-frontend-logs='docker-compose -p astrid-dev -f docker-compose.yaml 
 alias astrid-redis-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f redis'
 alias astrid-mlflow-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f mlflow'
 alias astrid-prefect-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f prefect'
+alias astrid-organizr-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -f organizr'
 
 # Service-specific shells
 alias astrid-shell='docker-compose -p astrid-dev -f docker-compose.yaml exec api bash'
@@ -36,11 +45,19 @@ alias astrid-frontend-restart='docker-compose -p astrid-dev -f docker-compose.ya
 
 # Development helpers
 alias astrid-status='docker-compose -p astrid-dev -f docker-compose.yaml ps'
-alias astrid-health='curl -s http://localhost:8000/health | jq .'
-alias astrid-frontend='open http://localhost:3000'
-alias astrid-api-docs='open http://localhost:8000/docs'
+alias astrid-health='curl -s http://127.0.0.1:8000/health | jq .'
+alias astrid-api-health='docker-compose -p astrid-dev -f docker-compose.yaml exec api curl -sf http://127.0.0.1:8000/health || echo "API unhealthy"'
+alias astrid-prefect-health='docker-compose -p astrid-dev -f docker-compose.yaml exec prefect curl -sf http://localhost:4200/health || echo "Prefect unhealthy"'
+alias astrid-mlflow-health='docker-compose -p astrid-dev -f docker-compose.yaml exec mlflow python -c "import requests; print(requests.get('http://localhost:5000/health').status_code)" || echo "MLflow unhealthy"'
+
+alias astrid-restart-api='docker-compose -p astrid-dev -f docker-compose.yaml restart api && docker-compose -p astrid-dev -f docker-compose.yaml logs -f api'
+alias astrid-restart-prefect='docker-compose -p astrid-dev -f docker-compose.yaml restart prefect && docker-compose -p astrid-dev -f docker-compose.yaml logs -f prefect'
+alias astrid-restart-mlflow='docker-compose -p astrid-dev -f docker-compose.yaml restart mlflow && docker-compose -p astrid-dev -f docker-compose.yaml logs -f mlflow'
+alias astrid-frontend='open http://localhost:3010'
+alias astrid-api-docs='open http://127.0.0.1:8000/docs'
 alias astrid-mlflow='open http://localhost:5000'
 alias astrid-prefect='open http://localhost:4200'
+alias astrid-organizr='open http://localhost:8080'
 
 # Database troubleshooting
 alias astrid-db-test='docker-compose -p astrid-dev -f docker-compose.yaml exec api python -c "import asyncio; from src.core.db.session import test_connection; print(asyncio.run(test_connection()))"'
@@ -58,15 +75,15 @@ alias astrid-db-logs='docker-compose -p astrid-dev -f docker-compose.yaml logs -
 alias astrid-errors='docker-compose -p astrid-dev -f docker-compose.yaml logs --tail=50 | grep -i error'
 
 # Quick access URLs
-alias astrid-urls='echo "Frontend: http://localhost:3000" && echo "API: http://localhost:8000" && echo "API Docs: http://localhost:8000/docs" && echo "MLflow: http://localhost:5000" && echo "Prefect: http://localhost:4200"'
+alias astrid-urls='echo "Organizr Dashboard: http://localhost:8080" && echo "Frontend: http://localhost:3010" && echo "API: http://127.0.0.1:8000" && echo "API Docs: http://127.0.0.1:8000/docs" && echo "MLflow: http://localhost:5000" && echo "Prefect: http://localhost:4200"'
 
-echo "  Available aliases:"
-echo "    astrid-up, astrid-down, astrid-logs, astrid-restart, astrid-build, astrid-prune"
-echo "    astrid-api-logs, astrid-worker-logs, astrid-prefect-worker-logs, astrid-frontend-logs"
-echo "    astrid-redis-logs, astrid-mlflow-logs, astrid-prefect-logs"
-echo "    astrid-shell, astrid-worker-shell, astrid-prefect-worker-shell, astrid-frontend-shell"
-echo "    astrid-api-restart, astrid-worker-restart, astrid-prefect-worker-restart, astrid-frontend-restart"
-echo "    astrid-status, astrid-health, astrid-frontend, astrid-api-docs, astrid-prefect"
-echo "    astrid-db-test, astrid-db-shell, astrid-clean-restart, astrid-db-logs, astrid-errors"
-echo "    astrid-api-build, astrid-prefect-build"
-echo "    astrid-urls (shows all service URLs)"
+# echo "  Available aliases:"
+# echo "    astrid-up, astrid-down, astrid-logs, astrid-restart, astrid-build, astrid-prune"
+# echo "    astrid-api-logs, astrid-worker-logs, astrid-prefect-worker-logs, astrid-frontend-logs"
+# echo "    astrid-redis-logs, astrid-mlflow-logs, astrid-prefect-logs"
+# echo "    astrid-shell, astrid-worker-shell, astrid-prefect-worker-shell, astrid-frontend-shell"
+# echo "    astrid-api-restart, astrid-worker-restart, astrid-prefect-worker-restart, astrid-frontend-restart"
+# echo "    astrid-status, astrid-health, astrid-frontend, astrid-api-docs, astrid-prefect"
+# echo "    astrid-db-test, astrid-db-shell, astrid-clean-restart, astrid-db-logs, astrid-errors"
+# echo "    astrid-api-build, astrid-prefect-build"
+# echo "    astrid-urls (shows all service URLs)"

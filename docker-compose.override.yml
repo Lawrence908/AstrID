@@ -1,0 +1,38 @@
+# Development overrides for faster builds
+version: '3.8'
+
+services:
+  # Use optimized API build
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api.optimized
+    # Keep volume mounts for development
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./certs:/app/certs
+
+  # Use optimized Prefect worker build
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect.optimized
+    # Keep volume mounts for development
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./certs:/app/certs
+
+  # Use optimized worker build
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    # Keep volume mounts for development
+    volumes:
+      - .:/app
+      - ./src:/app/src
+      - ./logs:/app/logs
