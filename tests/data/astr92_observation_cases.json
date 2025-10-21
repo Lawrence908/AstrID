@@ -1,0 +1,36 @@
+{
+  "valid_cases": [
+    {
+      "input": {
+        "survey_id": "11111111-1111-1111-1111-111111111111",
+        "observation_id": "OBS_VALID_001",
+        "ra": 180.0,
+        "dec": 45.0,
+        "observation_time": "2024-09-19T12:00:00Z",
+        "filter_band": "g",
+        "exposure_time": 300.0,
+        "fits_url": "https://example.com/valid.fits",
+        "pixel_scale": 0.5,
+        "airmass": 1.2,
+        "seeing": 1.0
+      },
+      "expected_valid": true
+    }
+  ],
+  "invalid_cases": [
+    {
+      "input": {
+        "survey_id": "invalid-uuid",
+        "observation_id": "BAD",
+        "ra": 400.0,
+        "dec": 100.0,
+        "observation_time": "not-a-time"
+      },
+      "expected_valid": false,
+      "expected_error_substrings": [
+        "RA must be between 0 and 360 degrees",
+        "Dec must be between -90 and 90 degrees"
+      ]
+    }
+  ]
+}

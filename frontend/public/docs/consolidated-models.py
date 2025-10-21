@@ -855,31 +855,33 @@ class AuditLog(Base):
 # SUMMARY
 # ============================================================================
 
-# AstrID Database Models Summary:
-#
-# DOMAIN STRUCTURE:
-# - Observations: Survey, Observation (2 models)
-# - Preprocessing: PreprocessRun (1 model)
-# - Differencing: DifferenceRun, Candidate (2 models)
-# - Detection: Model, ModelRun, Detection (3 models)
-# - Curation: ValidationEvent, Alert (2 models)
-# - Catalog: SystemConfig, ProcessingJob, AuditLog (3 models)
-#
-# TOTAL: 13 models across 6 domains
+"""
+AstrID Database Models Summary:
 
-# KEY FEATURES:
-# - UUID primary keys for all models
-# - SQLAlchemy 2.0+ with Mapped type annotations
-# - Python enums with SQLAlchemy Enum integration
-# - JSONB fields for flexible metadata storage
-# - Proper relationships and foreign key constraints
-# - Spatial indexing on RA/Dec coordinates
-# - Comprehensive audit and workflow tracking
-# - ML model registry and inference tracking
-# - Human validation and curation workflows
+DOMAIN STRUCTURE:
+- Observations: Survey, Observation (2 models)
+- Preprocessing: PreprocessRun (1 model)
+- Differencing: DifferenceRun, Candidate (2 models)
+- Detection: Model, ModelRun, Detection (3 models)
+- Curation: ValidationEvent, Alert (2 models)
+- Catalog: SystemConfig, ProcessingJob, AuditLog (3 models)
 
-# DATA FLOW:
-# Survey → Observation → PreprocessRun → DifferenceRun → Candidate → ModelRun → Detection → ValidationEvent/Alert
+TOTAL: 13 models across 6 domains
 
-# This represents a complete astronomical transient detection pipeline from raw observations
-# through ML-based detection to human validation and alerting.
+KEY FEATURES:
+- UUID primary keys for all models
+- SQLAlchemy 2.0+ with Mapped type annotations
+- Python enums with SQLAlchemy Enum integration
+- JSONB fields for flexible metadata storage
+- Proper relationships and foreign key constraints
+- Spatial indexing on RA/Dec coordinates
+- Comprehensive audit and workflow tracking
+- ML model registry and inference tracking
+- Human validation and curation workflows
+
+DATA FLOW:
+Survey → Observation → PreprocessRun → DifferenceRun → Candidate → ModelRun → Detection → ValidationEvent/Alert
+
+This represents a complete astronomical transient detection pipeline from raw observations
+through ML-based detection to human validation and alerting.
+"""

@@ -94,7 +94,7 @@ class TestObservationValidator:
         self.validator.validate_fits_url(
             "https://data.example.com/observations/obs001.fits"
         )
-        self.validator.validate_fits_url("http://localhost:8000/test.fits")
+        self.validator.validate_fits_url("http://127.0.0.1:8000/test.fits")
 
     def test_validate_fits_url_invalid(self):
         """Test FITS URL validation with invalid URLs."""

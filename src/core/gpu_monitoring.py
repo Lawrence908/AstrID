@@ -57,6 +57,8 @@ class GPUPowerMonitor:
         self.carbon_intensity = carbon_intensity_kg_per_kwh
         self.metrics_history: list[GPUMetrics] = []
         self.is_monitoring = False
+        # Timestamp of the last reset to delineate segments (e.g., per-epoch)
+        self._last_reset_timestamp: datetime | None = None
 
     async def _get_gpu_metrics(self) -> list[GPUMetrics]:
         """Get current GPU metrics using nvidia-smi."""
@@ -127,18 +129,30 @@ class GPUPowerMonitor:
 
     async def _monitor_loop(self) -> None:
         """Background monitoring loop."""
-        while self.is_monitoring:
-            metrics = await self._get_gpu_metrics()
-            self.metrics_history.extend(metrics)
+        logger.info("🔄 Starting GPU monitoring loop")
+        try:
+            while self.is_monitoring:
+                try:
+                    metrics = await self._get_gpu_metrics()
+                    self.metrics_history.extend(metrics)
 
-            # Log current power draw
-            if metrics:
-                total_power = sum(m.power_draw_watts for m in metrics)
-                logger.debug(
-                    f"GPU power draw: {total_power:.1f}W across {len(metrics)} GPUs"
-                )
+                    # Log current power draw
+                    if metrics:
+                        total_power = sum(m.power_draw_watts for m in metrics)
+                        logger.info(
+                            f"🔋 GPU power draw: {total_power:.1f}W across {len(metrics)} GPUs (samples: {len(self.metrics_history)})"
+                        )
+                    else:
+                        logger.warning("No GPU metrics collected in this cycle")
 
-            await asyncio.sleep(self.sampling_interval)
+                    await asyncio.sleep(self.sampling_interval)
+                except Exception as e:
+                    logger.error(f"Error in monitoring loop iteration: {e}")
+                    await asyncio.sleep(self.sampling_interval)
+        except Exception as e:
+            logger.error(f"Fatal error in monitoring loop: {e}")
+        finally:
+            logger.info("🔄 GPU monitoring loop ended")
 
     async def start_monitoring(self) -> None:
         """Start monitoring GPU power consumption."""
@@ -148,6 +162,7 @@ class GPUPowerMonitor:
 
         self.is_monitoring = True
         self.metrics_history.clear()
+        self._last_reset_timestamp = None
 
         # Check if nvidia-smi is available
         try:
@@ -176,6 +191,7 @@ class GPUPowerMonitor:
 
         # Start monitoring task
         self._monitor_task = asyncio.create_task(self._monitor_loop())
+        logger.info(f"🔄 Created monitoring task: {self._monitor_task}")
 
     async def stop_monitoring(self) -> EnergyConsumption:
         """Stop monitoring and return energy consumption summary."""
@@ -194,9 +210,28 @@ class GPUPowerMonitor:
 
         return self._calculate_energy_consumption()
 
+    def reset_history(self) -> None:
+        """Reset collected metrics to start a new measurement segment."""
+        logger.info(
+            f"🔄 Resetting GPU monitoring history (had {len(self.metrics_history)} samples)"
+        )
+        logger.info(
+            f"🔄 Monitoring status: is_monitoring={self.is_monitoring}, task_running={hasattr(self, '_monitor_task') and not self._monitor_task.done()}"
+        )
+        self.metrics_history.clear()
+        self._last_reset_timestamp = datetime.utcnow()
+
+    def summarize(self) -> EnergyConsumption:
+        """Summarize energy consumption from currently collected samples without stopping."""
+        logger.info(
+            f"📊 Summarizing GPU energy from {len(self.metrics_history)} samples"
+        )
+        return self._calculate_energy_consumption()
+
     def _calculate_energy_consumption(self) -> EnergyConsumption:
         """Calculate total energy consumption from collected metrics."""
         if not self.metrics_history:
+            logger.warning("No GPU metrics history available for energy calculation")
             return EnergyConsumption(0, 0, 0, 0, 0, 0)
 
         # Group metrics by timestamp to get total power per sample

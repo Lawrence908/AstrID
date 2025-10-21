@@ -10,6 +10,7 @@ load_dotenv()
 # Application
 APP_VERSION = "0.1.0"  # Using version from core/constants.py
 APP_NAME = "AstrID"
+ASTRID_API_BASE = os.getenv("ASTRID_API_BASE", "http://127.0.0.1:8000")
 
 # Environment
 ENVIRONMENT = os.getenv("APP_ENV", "development")
@@ -26,6 +27,17 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 API_WORKERS = int(os.getenv("API_WORKERS", "1"))
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+# API KEYS
+TRAINING_PIPELINE_API_KEY = os.getenv("TRAINING_PIPELINE_API_KEY")
+PREFECT_WORKFLOWS_API_KEY = os.getenv("PREFECT_WORKFLOWS_API_KEY")
+READ_ONLY_API_KEY = os.getenv("READ_ONLY_API_KEY")
+FULL_ACCESS_API_KEY = os.getenv("FULL_ACCESS_API_KEY")
+
+ASTRID_HST_SURVEY_ID = os.getenv("ASTRID_HST_SURVEY_ID")
+ASTRID_JWST_SURVEY_ID = os.getenv("ASTRID_JWST_SURVEY_ID")
+ASTRID_DSS2_SURVEY_ID = os.getenv("ASTRID_DSS2_SURVEY_ID")
+ASTRID_TESS_SURVEY_ID = os.getenv("ASTRID_TESS_SURVEY_ID")
 
 # API metadata (from core/constants.py)
 API_TITLE = "AstrID API"
@@ -69,10 +81,6 @@ CLOUDFLARE_R2_BUCKET_NAME = os.getenv("CLOUDFLARE_R2_BUCKET_NAME", "astrid")
 CLOUDFLARE_R2_ENDPOINT_URL = os.getenv("CLOUDFLARE_R2_ENDPOINT_URL")
 CLOUDFLARE_EU_R2_ENDPOINT_URL = os.getenv("CLOUDFLARE_EU_R2_ENDPOINT_URL")
 
-# MLflow Configuration
-MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models")
-MLFLOW_S3_ENDPOINT_URL = os.getenv("MLFLOW_S3_ENDPOINT_URL")
-
 # MLflow Supabase Configuration
 MLFLOW_SUPABASE_URL = os.getenv("MLFLOW_SUPABASE_URL")
 MLFLOW_SUPABASE_PROJECT_REF = os.getenv("MLFLOW_SUPABASE_PROJECT_REF")
@@ -93,6 +101,26 @@ PREFECT_SUPABASE_KEY = os.getenv("PREFECT_SUPABASE_KEY")
 PREFECT_SUPABASE_SERVICE_ROLE_KEY = os.getenv("PREFECT_SUPABASE_SERVICE_ROLE_KEY")
 PREFECT_SUPABASE_JWT_SECRET = os.getenv("PREFECT_SUPABASE_JWT_SECRET")
 
+
+# MLflow Configuration
+MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models")
+MLFLOW_S3_ENDPOINT_URL = os.getenv("MLFLOW_S3_ENDPOINT_URL") or os.getenv(
+    "CLOUDFLARE_R2_ENDPOINT_URL"
+)
+MLFLOW_BUCKET_NAME = os.getenv("MLFLOW_BUCKET_NAME")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+MLFLOW_TRACING_ENABLED = os.getenv("MLFLOW_TRACING_ENABLED", "false")
+MLFLOW_S3_IGNORE_TLS = os.getenv("MLFLOW_S3_IGNORE_TLS")
+AWS_ACCESS_KEY_ID = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "auto")
+REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
+MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "inference")
+
+# R2 SSL options (optional)
+CLOUDFLARE_R2_VERIFY_SSL = False
+CLOUDFLARE_R2_CA_BUNDLE = os.getenv("CLOUDFLARE_R2_CA_BUNDLE")
+
 # Prefect Configuration
 PREFECT_API_URL = os.getenv("PREFECT_API_URL")
 
@@ -108,15 +136,21 @@ VIZIER_TIMEOUT = int(os.getenv("VIZIER_TIMEOUT", "300"))
 TWITTER_APP_ID = os.getenv("TWITTER_APP_ID")
 TWITTER_APP_SECRET = os.getenv("TWITTER_APP_SECRET")
 
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
 # Database Pool Configuration
+# Supabase has strict connection limits in Session mode
+# Each service (API, MLflow, Prefect) creates its own pool
+# Total connections = (pool_size + max_overflow) * number_of_services
 POOL_CONFIGS = {
     "development": {
-        "pool_size": 5,
-        "max_overflow": 10,
+        "pool_size": 1,  # Further reduced to 1 per service
+        "max_overflow": 0,  # No overflow to prevent exceeding limits
     },
     "production": {
-        "pool_size": 3,
-        "max_overflow": 2,
+        "pool_size": 1,  # Keep at 1
+        "max_overflow": 0,  # No overflow in production
     },
 }
 
@@ -134,8 +168,8 @@ DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds
@@ -155,8 +189,8 @@ MLFLOW_DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds
@@ -176,8 +210,8 @@ PREFECT_DB_CONFIG = {
     # Connection pool settings
     "pool_size": pool_config["pool_size"],
     "max_overflow": pool_config["max_overflow"],
-    "pool_timeout": 30,  # Seconds to wait for a connection from pool
-    "pool_recycle": 1800,  # Recycle connections after 30 minutes
+    "pool_timeout": 10,  # Reduced from 30 to 10 seconds - fail fast
+    "pool_recycle": 300,  # Reduced from 1800 to 300 seconds (5 minutes) - recycle more frequently
     "pool_pre_ping": True,  # Verify connections before use
     # Query timeout settings
     "command_timeout": 60,  # Default timeout for queries in seconds

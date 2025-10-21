@@ -204,6 +204,7 @@ class DetectionBase(BaseModel):
 class DetectionCreate(DetectionBase):
     """Schema for creating a new detection."""
 
+    observation_id: UUID | None = None  # Override to make optional
     model_run_id: UUID
 
     class Config:

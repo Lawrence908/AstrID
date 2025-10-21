@@ -502,14 +502,14 @@ class ObservationService:
             surveys: List of surveys to use
 
         Returns:
-            Dictionary with dataset information
+            Dictionary with dataset information including database record
         """
         self.logger.info(f"Creating reference dataset for RA={ra:.4f}°, Dec={dec:.4f}°")
 
         try:
             ingestion_service = DataIngestionService()
 
-            fits_path = await ingestion_service.create_reference_dataset(
+            result = await ingestion_service.create_reference_dataset(
                 ra=ra,
                 dec=dec,
                 size=size,
@@ -517,16 +517,48 @@ class ObservationService:
                 surveys=surveys,
             )
 
-            self.logger.info(f"Successfully created reference dataset: {fits_path}")
+            self.logger.info(
+                f"Successfully created reference dataset: {result.get('r2_object_key', result.get('local_path'))}"
+            )
 
-            return {
-                "fits_file_path": fits_path,
-                "ra": ra,
-                "dec": dec,
-                "size_degrees": size,
-                "pixels": pixels,
-                "surveys": surveys or ["DSS"],
-            }
+            # Create observation record in database
+            from datetime import datetime
+
+            from src.domains.observations.schema import ObservationCreate
+
+            # Generate a unique observation ID for the reference dataset
+            survey_name = surveys[0] if surveys else "DSS2_Red"
+            observation_id = (
+                f"ref_{survey_name}_{ra:.4f}_{dec:.4f}_{size}deg_{pixels}px"
+            )
+
+            # Use R2 URL if available, otherwise local path
+            fits_url = result.get("r2_url", result.get("local_path", ""))
+
+            observation_data = ObservationCreate(
+                survey_id=survey_id,
+                observation_id=observation_id,
+                ra=ra,
+                dec=dec,
+                observation_time=datetime.utcnow(),
+                filter_band=survey_name,
+                exposure_time=0.001,  # Reference datasets don't have exposure time, use minimal value
+                fits_url=fits_url,
+                pixel_scale=size / pixels,  # Approximate pixel scale
+                image_width=pixels,
+                image_height=pixels,
+            )
+
+            # Create the observation record
+            observation = await self.create_observation(observation_data)
+
+            # Add the observation ID to the result
+            result["observation_id"] = str(observation.id)
+            result["observation_record"] = observation.model_dump()
+
+            self.logger.info(f"Created observation record: {observation.id}")
+
+            return result
 
         except Exception as e:
             self.logger.error(f"Failed to create reference dataset: {e}")

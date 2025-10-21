@@ -13,7 +13,7 @@ A Next.js frontend for displaying AstrID system diagrams, documentation, and pla
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20 
 - npm or yarn
 
 ### Installation
@@ -96,7 +96,7 @@ The app uses Tailwind CSS with a custom AstrID theme:
 
 ### API Integration
 
-The frontend is configured to proxy API requests to `localhost:8000` (your FastAPI backend) via Next.js rewrites in `next.config.js`.
+The frontend is configured to proxy API requests to `127.0.0.1:8000` (your FastAPI backend) via Next.js rewrites in `next.config.js`.
 
 ## Development Notes
 

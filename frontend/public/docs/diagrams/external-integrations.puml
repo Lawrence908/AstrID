@@ -1,0 +1,105 @@
+@startuml AstrID External Integrations
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID External Integrations
+
+package "AstrID System" {
+    [MAST Client] as MASTClient
+    [SkyView Client] as SkyViewClient
+    [R2 Storage Client] as R2Client
+    [Observation Service] as ObsService
+    [Preprocessing Service] as PreprocessService
+}
+
+package "External APIs" {
+    [MAST API] as MAST
+    [SkyView API] as SkyView
+    [Astronomical Catalogs] as Catalogs
+}
+
+package "Cloud Storage" {
+    [Cloudflare R2] as R2
+    [Content Addressing] as CAS
+}
+
+package "Data Flow" {
+    [FITS Files] as FITS
+    [Reference Images] as RefImages
+    [Metadata] as Metadata
+}
+
+' MAST Integration
+MASTClient --> MAST : "Query observations"
+MAST --> MASTClient : "Observation metadata"
+MASTClient --> ObsService : "Observation data"
+MASTClient --> R2Client : "Download FITS files"
+R2Client --> R2 : "Store FITS files"
+
+' SkyView Integration
+SkyViewClient --> SkyView : "Get reference images"
+SkyView --> SkyViewClient : "Image cutouts"
+SkyViewClient --> PreprocessService : "Reference data"
+SkyViewClient --> R2Client : "Download images"
+R2Client --> R2 : "Store reference images"
+
+' Catalog Integration
+ObsService --> Catalogs : "Cross-reference sources"
+Catalogs --> ObsService : "Source information"
+
+' Storage Integration
+R2Client --> R2 : "Upload/Download files"
+R2Client --> CAS : "Content addressing"
+CAS --> R2 : "Deduplicated storage"
+
+' Data Flow
+MASTClient --> FITS : "Downloads"
+SkyViewClient --> RefImages : "Downloads"
+ObsService --> Metadata : "Extracts"
+PreprocessService --> FITS : "Processes"
+PreprocessService --> RefImages : "Uses"
+
+' Integration Points
+note right of MASTClient
+  ASTR-74: Survey Integration
+  - Query by position/time
+  - Download FITS files
+  - Extract metadata
+end note
+
+note right of SkyViewClient
+  Reference Image Management
+  - Multi-wavelength data
+  - Historical surveys
+  - Coverage checking
+end note
+
+note right of R2Client
+  ASTR-71: Cloud Storage
+  - Content addressing
+  - Version control
+  - Lifecycle management
+end note
+
+' Auth and Rate Limits
+note bottom of MAST
+  Auth: API token (env)
+  Rate Limit: 100 req/min
+  Backoff: exp (base=2, jitter)
+end note
+
+note bottom of SkyView
+  Auth: none (public)
+  Rate Limit: 60 req/min
+  Backoff: linear (1s..30s)
+end note
+
+note bottom of R2
+  Auth: Access Key/Secret
+  Rate Limit: per-account
+  Retry: idempotent PUT with checksum
+end note
+
+@enduml

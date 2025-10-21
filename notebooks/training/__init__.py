@@ -1,0 +1,1 @@
+"""AstrID training notebooks package."""

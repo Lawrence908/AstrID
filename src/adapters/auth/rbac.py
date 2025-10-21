@@ -228,6 +228,10 @@ class UserWithRole(BaseModel):
     role: Role
     permissions: list[Permission]
 
+    def has_permission(self, permission: Permission) -> bool:
+        """Check if the user has a specific permission."""
+        return permission in self.permissions
+
 
 def get_current_user_with_role(current_user: User) -> UserWithRole:
     """Get current user with role and permissions information."""

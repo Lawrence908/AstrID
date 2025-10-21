@@ -1,0 +1,133 @@
+@startuml AstrID Workflow Orchestration
+!theme cerulean
+skinparam backgroundColor #0D1117
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+title AstrID Workflow Orchestration
+
+package "Prefect Flows" {
+    [Observation Ingestion Flow] as ObsFlow
+    [Preprocessing Flow] as PreprocessFlow
+    [Differencing Flow] as DiffFlow
+    [Detection Flow] as DetectionFlow
+    [Validation Flow] as ValidationFlow
+    [Catalog Flow] as CatalogFlow
+}
+
+package "Dramatiq Workers" {
+    [Observation Worker] as ObsWorker
+    [Preprocessing Worker] as PreprocessWorker
+    [Differencing Worker] as DiffWorker
+    [Detection Worker] as DetectionWorker
+    [Validation Worker] as ValidationWorker
+}
+
+package "Redis Events" {
+    [observation.ingested] as ObsEvent
+    [observation.preprocessed] as PreprocessEvent
+    [candidates.found] as CandidatesEvent
+    [detections.created] as DetectionEvent
+    [detections.validated] as ValidationEvent
+}
+
+package "External Triggers" {
+    [Scheduled Ingestion] as Scheduled
+    [Manual Trigger] as Manual
+    [API Request] as API
+}
+
+' Flow orchestration
+Scheduled --> ObsFlow : "Daily ingestion"
+Manual --> ObsFlow : "On-demand"
+API --> ObsFlow : "Real-time"
+
+ObsFlow --> ObsWorker : "Process observation (queue=obs, concurrency=4)"
+ObsWorker --> ObsEvent : "Publish event"
+ObsEvent --> PreprocessFlow : "Trigger preprocessing"
+
+PreprocessFlow --> PreprocessWorker : "Process image (queue=pre, concurrency=8)"
+PreprocessWorker --> PreprocessEvent : "Publish event"
+PreprocessEvent --> DiffFlow : "Trigger differencing"
+
+DiffFlow --> DiffWorker : "Create difference (queue=diff, concurrency=4)"
+DiffWorker --> CandidatesEvent : "Publish event"
+CandidatesEvent --> DetectionFlow : "Trigger detection"
+
+DetectionFlow --> DetectionWorker : "Run ML inference (queue=ml, concurrency=2)"
+DetectionWorker --> DetectionEvent : "Publish event"
+DetectionEvent --> ValidationFlow : "Trigger validation"
+
+ValidationFlow --> ValidationWorker : "Queue for review (queue=curation, concurrency=2)"
+ValidationWorker --> ValidationEvent : "Publish event"
+ValidationEvent --> CatalogFlow : "Trigger cataloging"
+
+' Error handling flows
+ObsWorker --> ObsFlow : "Error handling"
+PreprocessWorker --> PreprocessFlow : "Error handling"
+DiffWorker --> DiffFlow : "Error handling"
+DetectionWorker --> DetectionFlow : "Error handling"
+ValidationWorker --> ValidationFlow : "Error handling"
+
+' Retry mechanisms with parameters
+note right of ObsWorker
+  Retry Policy:
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=5m)
+  - DLQ: obs.dlq
+end note
+
+note right of PreprocessWorker
+  Retry Policy:
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=10m)
+  - DLQ: pre.dlq
+end note
+
+note right of DiffWorker
+  Retry Policy:
+  - Max retries: 3
+  - Backoff: exponential (base=2, max=10m)
+  - DLQ: diff.dlq
+end note
+
+note right of DetectionWorker
+  Retry Policy:
+  - Max retries: 2
+  - Backoff: exponential (base=3, max=15m)
+  - DLQ: ml.dlq
+end note
+
+note right of ValidationWorker
+  Retry Policy:
+  - Max retries: 5
+  - Backoff: linear (step=1m, max=10m)
+  - DLQ: cur.dlq
+end note
+
+' Concurrency model
+note bottom of PreprocessFlow
+  Parallelism:
+  - Fan-out by observation
+  - Limit: 8 concurrent jobs
+  - Resource: CPU-bound
+end note
+
+note bottom of DetectionFlow
+  Parallelism:
+  - Batch candidates per image
+  - GPU pool size: 1-2
+  - Rate limit: 30 inferences/min
+end note
+
+' Monitoring and alerting
+ObsFlow --> [Monitoring] : "Metrics"
+PreprocessFlow --> [Monitoring] : "Metrics"
+DiffFlow --> [Monitoring] : "Metrics"
+DetectionFlow --> [Monitoring] : "Metrics"
+ValidationFlow --> [Monitoring] : "Metrics"
+CatalogFlow --> [Monitoring] : "Metrics"
+
+[Monitoring] --> [Alerting] : "Thresholds exceeded"
+
+@enduml

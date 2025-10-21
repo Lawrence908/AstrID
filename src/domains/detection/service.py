@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.logging import configure_domain_logger
 from src.domains.detection.repository import DetectionRepository
 from src.domains.detection.schema import DetectionCreate
+from src.domains.detection.services.detection_service import (
+    DetectionService as ComprehensiveDetectionService,
+)
 
 
 class DetectionService:
@@ -15,6 +18,8 @@ class DetectionService:
     def __init__(self, db: AsyncSession) -> None:
         self.repository = DetectionRepository(db)
         self.logger = configure_domain_logger("detection.detection")
+        # Initialize comprehensive detection service
+        self.comprehensive_service = ComprehensiveDetectionService(db)
 
     async def create_detection(self, detection_data: DetectionCreate) -> Any:
         """Create a new detection with business logic."""
