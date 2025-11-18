@@ -229,7 +229,7 @@ services:
     image: organizr/organizr:latest
     container_name: astrid-organizr-dev
     ports:
-      - "9000:80"
+      - "9005:80"
     environment:
       - PUID=1000
       - PGID=1000
