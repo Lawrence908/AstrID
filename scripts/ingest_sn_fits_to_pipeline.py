@@ -309,7 +309,23 @@ async def main():
     ingestion_results = []
     for i, sn_result in enumerate(query_results, 1):
         sn_name = sn_result["sn_name"]
+        
+        # Check if this supernova has both reference and science observations
+        ref_obs_count = len(sn_result.get("reference_observations", []))
+        sci_obs_count = len(sn_result.get("science_observations", []))
+        
         logger.info(f"\n[{i}/{len(query_results)}] Processing {sn_name}")
+        logger.info(f"  Reference observations in query: {ref_obs_count}")
+        logger.info(f"  Science observations in query: {sci_obs_count}")
+        
+        if ref_obs_count == 0 and sci_obs_count == 0:
+            logger.warning(f"  ⚠️  {sn_name} has no observations - skipping")
+            continue
+        
+        if ref_obs_count == 0:
+            logger.warning(f"  ⚠️  {sn_name} has no reference observations")
+        if sci_obs_count == 0:
+            logger.warning(f"  ⚠️  {sn_name} has no science observations")
         
         # Get file paths from download results if available
         # Otherwise, construct paths from observation IDs
@@ -328,9 +344,12 @@ async def main():
                 science_files = [str(f.relative_to(args.fits_dir)) for f in sci_dir.glob("*.fits")]
         
         if not reference_files and not science_files:
-            logger.warning(f"No FITS files found for {sn_name} in {sn_dir}")
-            logger.info("Tip: Run download_sn_fits.py first to download the files")
+            logger.warning(f"  ❌ No FITS files found for {sn_name} in {sn_dir}")
+            logger.info(f"  💡 Tip: Run download_sn_fits.py first to download the files")
+            logger.info(f"     Example: python scripts/download_sn_fits.py --query-results {args.query_results} --output-dir {args.fits_dir} --filter-has-both")
             continue
+        
+        logger.info(f"  ✅ Found {len(reference_files)} reference and {len(science_files)} science FITS files")
         
         result = await ingest_supernova_pair(
             sn_name=sn_name,
