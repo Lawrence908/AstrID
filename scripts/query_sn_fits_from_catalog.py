@@ -192,7 +192,7 @@ def parse_catalog_file(catalog_path: Path) -> list[dict[str, Any]]:
 async def query_mast_for_supernova(
     sn_entry: dict[str, Any],
     missions: list[str] | None = None,
-    days_before: int = 365,
+    days_before: int = 730,  # Increased default to 2 years
     days_after: int = 365,
     radius_deg: float = 0.1,
 ) -> dict[str, Any]:
@@ -296,13 +296,18 @@ async def main():
         "--missions",
         nargs="+",
         default=["HST", "JWST", "TESS"],
-        help="Space missions to query (default: HST JWST TESS)",
+        help="Space missions to query (default: HST JWST TESS). Use '--missions NONE' to see all available missions",
+    )
+    parser.add_argument(
+        "--no-mission-filter",
+        action="store_true",
+        help="Don't filter by missions - show all available observations",
     )
     parser.add_argument(
         "--days-before",
         type=int,
-        default=365,
-        help="Days before discovery to search for reference images (default: 365)",
+        default=730,
+        help="Days before discovery to search for reference images (default: 730 = 2 years)",
     )
     parser.add_argument(
         "--days-after",
@@ -352,6 +357,14 @@ async def main():
         entries = entries[: args.limit]
         logger.info(f"Limited to {args.limit} entries")
     
+    # Handle mission filtering
+    missions_to_query = None if args.no_mission_filter else args.missions
+    if args.no_mission_filter:
+        logger.info("Mission filtering disabled - will show all available observations")
+    elif args.missions and args.missions[0].upper() == "NONE":
+        missions_to_query = None
+        logger.info("Mission filtering disabled (--missions NONE specified)")
+    
     # Query MAST for each supernova
     results = []
     for i, entry in enumerate(entries, 1):
@@ -359,7 +372,7 @@ async def main():
         
         result = await query_mast_for_supernova(
             entry,
-            missions=args.missions,
+            missions=missions_to_query,
             days_before=args.days_before,
             days_after=args.days_after,
             radius_deg=args.radius,

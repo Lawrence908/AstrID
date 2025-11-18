@@ -148,10 +148,38 @@ If MAST doesn't have sufficient data for your needs:
 
 ### No Observations Found
 
-- **Check date range**: Older supernovae may not have space telescope observations
-- **Increase search radius**: Try `--radius 0.2` or `0.5` degrees
-- **Try different missions**: Some missions have better coverage in certain regions
-- **Check coordinates**: Verify the supernova coordinates are correct
+If you see "Found 0 observations" but "MAST query returned X raw observations":
+
+1. **Check what missions are available**: The script now shows which missions are in the raw results
+   ```bash
+   # Run without mission filtering to see all available missions
+   python scripts/query_sn_fits_from_catalog.py \
+       --catalog resources/sncat_latest_view.txt \
+       --limit 1 \
+       --no-mission-filter
+   ```
+
+2. **Mission name mismatch**: MAST may use different mission names. Common ones:
+   - `HST` (Hubble Space Telescope)
+   - `JWST` (James Webb Space Telescope) 
+   - `TESS` (Transiting Exoplanet Survey Satellite)
+   - `GALEX` (Galaxy Evolution Explorer)
+   - `Kepler`, `K2` (Kepler missions)
+   - `WISE`, `NEOWISE` (Wide-field Infrared Survey Explorer)
+
+3. **Expand time window**: Increase `--days-before` to 730 or 1095 (2-3 years)
+   ```bash
+   --days-before 1095  # 3 years before discovery
+   ```
+
+4. **Increase search radius**: Try `--radius 0.2` or `0.5` degrees
+
+5. **Try different missions**: Some missions have better coverage in certain regions
+   ```bash
+   --missions GALEX WISE  # Try other missions
+   ```
+
+6. **Check coordinates**: Verify the supernova coordinates are correct
 
 ### Parsing Errors
 
