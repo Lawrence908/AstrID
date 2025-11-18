@@ -54,22 +54,36 @@ def download_observation_fits(
             return []
         
         # Filter for science products (FITS files)
-        # Look for science products, drizzled images, or FITS files
-        science_products = products[
-            (products['productSubGroupDescription'] == 'SCI') |
-            (products['productSubGroupDescription'] == 'DRZ') |
-            (products['productSubGroupDescription'].str.contains('FITS', case=False, na=False))
-        ]
+        # astroquery returns astropy Table, not pandas DataFrame
+        # Convert to list of indices that match our criteria
+        import numpy as np
         
-        if len(science_products) == 0:
+        matching_indices = []
+        for i, row in enumerate(products):
+            sub_group = str(row.get('productSubGroupDescription', '')).upper()
+            filename = str(row.get('productFilename', ''))
+            
+            # Check if it's a science product
+            if (sub_group in ['SCI', 'DRZ'] or 
+                'FITS' in sub_group or 
+                filename.upper().endswith('.FITS')):
+                matching_indices.append(i)
+        
+        if len(matching_indices) == 0:
             # Fallback: take first product that's a FITS file
-            fits_products = products[products['productFilename'].str.endswith('.fits', case=False, na=False)]
-            if len(fits_products) > 0:
-                science_products = fits_products[:1]
-                logger.info(f"Using first available FITS product for {obs_id}")
-            else:
-                logger.warning(f"No FITS products found for {obs_id}")
-                return []
+            for i, row in enumerate(products):
+                filename = str(row.get('productFilename', ''))
+                if filename.upper().endswith('.FITS'):
+                    matching_indices.append(i)
+                    break
+        
+        if len(matching_indices) == 0:
+            logger.warning(f"No FITS products found for {obs_id}")
+            return []
+        
+        # Select matching products
+        science_products = products[matching_indices]
+        logger.info(f"Found {len(science_products)} science products for {obs_id}")
         
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -84,18 +98,33 @@ def download_observation_fits(
         
         # Find downloaded files
         downloaded_files = []
-        if 'Local Path' in manifest.columns:
-            for path in manifest['Local Path']:
-                if path and Path(path).exists():
-                    downloaded_files.append(Path(path))
-        else:
-            # Search for downloaded files
-            for product in science_products:
-                filename = product.get('productFilename', '')
+        if manifest is not None and len(manifest) > 0:
+            # Check if manifest has 'Local Path' column (astropy Table)
+            if 'Local Path' in manifest.colnames:
+                for row in manifest:
+                    path = str(row.get('Local Path', ''))
+                    if path and Path(path).exists():
+                        downloaded_files.append(Path(path))
+            # Also check for pandas-style column access
+            elif hasattr(manifest, 'columns') and 'Local Path' in manifest.columns:
+                for path in manifest['Local Path']:
+                    if path and Path(path).exists():
+                        downloaded_files.append(Path(path))
+        
+        # Fallback: search for downloaded files by filename
+        if len(downloaded_files) == 0:
+            for row in science_products:
+                filename = str(row.get('productFilename', ''))
                 if filename:
                     file_path = output_dir / filename
                     if file_path.exists():
                         downloaded_files.append(file_path)
+                    # Also check for files with different extensions or names
+                    # MAST sometimes downloads with different names
+                    for existing_file in output_dir.glob(f"*{filename.split('.')[0]}*"):
+                        if existing_file.suffix.lower() in ['.fits', '.fit']:
+                            downloaded_files.append(existing_file)
+                            break
         
         logger.info(f"Downloaded {len(downloaded_files)} files for {obs_id}")
         return downloaded_files
