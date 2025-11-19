@@ -53,10 +53,10 @@ def _print_accessible_urls(run_id: str, experiment_id: str):
     except Exception:
         # Fallback to localhost if there's any issue
         print(
-            f"🏃 View run training_data_{run_id} at: http://localhost:5000/#/experiments/{experiment_id}/runs/{run_id}"
+            f"🏃 View run training_data_{run_id} at: http://localhost:9003/#/experiments/{experiment_id}/runs/{run_id}"
         )
         print(
-            f"🧪 View experiment at: http://localhost:5000/#/experiments/{experiment_id}"
+            f"🧪 View experiment at: http://localhost:9003/#/experiments/{experiment_id}"
         )
 
 

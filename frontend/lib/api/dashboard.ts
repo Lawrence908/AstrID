@@ -1,6 +1,6 @@
 // Dashboard API service for fetching real data from AstrID backend
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9001'
 
 export interface ApiResponse<T> {
   success: boolean
@@ -92,17 +92,17 @@ class DashboardApiService {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     }
-    
+
     if (this.authToken) {
       headers.Authorization = `Bearer ${this.authToken}`
     }
-    
+
     return headers
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
-    
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -129,7 +129,7 @@ class DashboardApiService {
     try {
       // Get total observations count
       const observations = await this.request<any[]>('/v1/observations?limit=1')
-      
+
       // For now, return mock data structure that matches your training pipeline
       // In production, you'd calculate these from actual observation data
       return {
@@ -161,7 +161,7 @@ class DashboardApiService {
     offset?: number
   } = {}) {
     const params = new URLSearchParams()
-    
+
     if (filters.survey) params.append('survey', filters.survey)
     if (filters.status) params.append('status', filters.status)
     if (filters.filter) params.append('filter_band', filters.filter)
@@ -176,7 +176,7 @@ class DashboardApiService {
   async getDetectionStats(): Promise<DetectionStats> {
     try {
       const stats = await this.request<any>('/v1/detections/statistics')
-      
+
       return {
         total_detections: stats.total_detections || 0,
         confirmed: stats.validated_detections || 0,
@@ -207,10 +207,10 @@ class DashboardApiService {
     offset?: number
   } = {}) {
     const params = new URLSearchParams()
-    
+
     if (filters.status) params.append('status', filters.status)
     if (filters.confidence) {
-      const minConfidence = filters.confidence === 'high' ? '0.8' : 
+      const minConfidence = filters.confidence === 'high' ? '0.8' :
                            filters.confidence === 'medium' ? '0.6' : '0.0'
       params.append('min_confidence', minConfidence)
     }

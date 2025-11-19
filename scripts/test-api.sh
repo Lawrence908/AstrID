@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:9001}"
 API_VERSION="${API_VERSION:-v1}"
 ACCESS_TOKEN="${ACCESS_TOKEN:-}"
 VERBOSE="${VERBOSE:-false}"
@@ -456,7 +456,7 @@ show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo
     echo "Options:"
-    echo "  -u, --url URL          API base URL (default: http://127.0.0.1:8000)"
+    echo "  -u, --url URL          API base URL (default: http://localhost:9001)"
     echo "  -v, --version VERSION  API version (default: v1)"
     echo "  -t, --token TOKEN      Access token for authenticated requests"
     echo "  --verbose              Enable verbose output"

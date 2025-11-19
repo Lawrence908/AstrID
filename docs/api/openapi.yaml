@@ -65,7 +65,7 @@ info:
   termsOfService: https://astrid.chrislawrence.ca/terms
 
 servers:
-  - url: http://127.0.0.1:8000
+  - url: http://localhost:9001
     description: Development server
   - url: https://api.astrid.chrislawrence.ca
     description: Production server

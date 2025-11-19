@@ -9,7 +9,7 @@ import requests
 # Add the src directory to the path so we can import modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-API_BASE = "http://127.0.0.1:8000"
+API_BASE = "http://localhost:9001"
 
 
 def authenticate_user(email: str, password: str) -> str | None:

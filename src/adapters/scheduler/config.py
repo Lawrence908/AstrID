@@ -11,7 +11,7 @@ class PrefectConfig(BaseModel):
 
     # Server configuration
     server_url: str = Field(
-        default="http://localhost:4200/api",
+        default="http://localhost:9004/api",
         description="Prefect server API URL",
     )
 

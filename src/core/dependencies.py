@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # MLflow
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    mlflow_tracking_uri: str = "http://localhost:9003"
 
     # Cloudflare R2
     cloudflare_r2_endpoint_url: str = ""
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     cloudflare_r2_secret_access_key: str = ""
 
     # Prefect
-    prefect_server_url: str = "http://localhost:4200"
+    prefect_server_url: str = "http://localhost:9004"
     prefect_supabase_project_ref: str = ""
     prefect_supabase_password: str = ""
     prefect_supabase_host: str = ""

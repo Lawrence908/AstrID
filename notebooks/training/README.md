@@ -71,7 +71,7 @@ notebooks/training/
    ```
 
 3. **Monitor Progress**
-   - MLflow UI: http://localhost:5000
+   - MLflow UI: http://localhost:9003
    - Training logs: Available in MLflow UI
    - Model checkpoints: `checkpoints/` directory
 
@@ -147,7 +147,7 @@ analysis = energy_analyzer.analyze_energy_consumption(energy_data)
 
 1. **MLflow Connection Error**
    - Ensure MLflow server is running: `docker-compose up mlflow-server`
-   - Check tracking URI: `http://localhost:5000`
+   - Check tracking URI: `http://localhost:9003`
 
 2. **GPU Energy Tracking Issues**
    - Install nvidia-smi: `nvidia-smi`

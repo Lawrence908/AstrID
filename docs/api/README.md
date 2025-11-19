@@ -12,8 +12,8 @@ Welcome to the AstrID API documentation. This comprehensive guide provides every
 
 ### API Reference
 - [OpenAPI Specification](openapi.yaml) - Complete API specification in OpenAPI 3.0 format
-- [Interactive Documentation](http://127.0.0.1:8000/docs) - Try the API directly in your browser
-- [ReDoc Documentation](http://127.0.0.1:8000/redoc) - Alternative documentation format
+- [Interactive Documentation](http://localhost:9001/docs) - Try the API directly in your browser
+- [ReDoc Documentation](http://localhost:9001/redoc) - Alternative documentation format
 
 ### Code Examples
 - [Python Examples](usage-guide.md#python) - Complete Python client implementation
@@ -31,7 +31,7 @@ Welcome to the AstrID API documentation. This comprehensive guide provides every
 
 ```bash
 # Register a new user
-curl -X POST "http://127.0.0.1:8000/v1/auth/register" \
+curl -X POST "http://localhost:9001/v1/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your-email@example.com",
@@ -40,7 +40,7 @@ curl -X POST "http://127.0.0.1:8000/v1/auth/register" \
   }'
 
 # Login to get access token
-curl -X POST "http://127.0.0.1:8000/v1/auth/login" \
+curl -X POST "http://localhost:9001/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your-email@example.com",
@@ -51,7 +51,7 @@ curl -X POST "http://127.0.0.1:8000/v1/auth/login" \
 ### 2. Create an Observation
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/observations" \
+curl -X POST "http://localhost:9001/v1/observations" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -68,7 +68,7 @@ curl -X POST "http://127.0.0.1:8000/v1/observations" \
 ### 3. Run Detection
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/detections/infer" \
+curl -X POST "http://localhost:9001/v1/detections/infer" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,7 +118,7 @@ curl -X POST "http://127.0.0.1:8000/v1/detections/infer" \
 
 ```bash
 # API Configuration
-API_BASE_URL=http://127.0.0.1:8000
+API_BASE_URL=http://localhost:9001
 API_VERSION=v1
 ACCESS_TOKEN=your-access-token
 
@@ -171,10 +171,10 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 ```bash
 # Basic health check
-curl http://127.0.0.1:8000/health
+curl http://localhost:9001/health
 
 # Detailed health check
-curl http://127.0.0.1:8000/v1/health
+curl http://localhost:9001/v1/health
 ```
 
 ### Metrics

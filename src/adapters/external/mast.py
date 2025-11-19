@@ -340,13 +340,21 @@ class MASTClient:
             # Convert to list of dictionaries and filter by missions
             observations = []
             filtered_count = 0
+            mission_counts = {}  # Track missions in raw results
+            
             for row in obs_table:
                 mission = str(row.get("obs_collection", ""))
+                
+                # Track mission distribution in raw results
+                mission_counts[mission] = mission_counts.get(mission, 0) + 1
 
-                # Filter by missions if specified
-                if missions and mission not in missions:
-                    filtered_count += 1
-                    continue
+                # Filter by missions if specified (case-insensitive)
+                if missions:
+                    mission_upper = mission.upper()
+                    missions_upper = [m.upper() for m in missions]
+                    if mission_upper not in missions_upper:
+                        filtered_count += 1
+                        continue
 
                 # Filter by time if specified
                 if start_time or end_time:
@@ -391,6 +399,18 @@ class MASTClient:
             )
             if missions:
                 self.logger.info(f"Filtered for missions: {missions}")
+                # Show what missions were actually in the raw results (helpful for debugging)
+                if mission_counts:
+                    mission_summary = dict(sorted(mission_counts.items(), key=lambda x: x[1], reverse=True))
+                    self.logger.info(f"Missions in raw results: {mission_summary}")
+                    # Warn if requested missions not found
+                    requested_upper = [m.upper() for m in missions]
+                    found_missions = [m for m in mission_counts.keys() if m.upper() in requested_upper]
+                    if not found_missions and len(obs_table) > 0:
+                        self.logger.warning(
+                            f"None of the requested missions {missions} found in results. "
+                            f"Available missions: {list(mission_counts.keys())}"
+                        )
             if start_time or end_time:
                 self.logger.info(f"Filtered for time range: {start_time} to {end_time}")
             return observations
