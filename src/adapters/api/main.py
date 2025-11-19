@@ -330,7 +330,7 @@ async def health_check():
             async with httpx.AsyncClient(timeout=5.0) as client:
                 # Try both localhost (for external access) and mlflow (for container network)
                 mlflow_urls = [
-                    "http://localhost:5000/health",
+                    "http://localhost:9003/health",
                     "http://mlflow:5000/health",
                 ]
                 mlflow_healthy = False
@@ -378,7 +378,7 @@ async def health_check():
             async with httpx.AsyncClient(timeout=5.0) as client:
                 # Try both localhost (for external access) and prefect (for container network)
                 prefect_urls = [
-                    "http://localhost:4200/health",
+                    "http://localhost:9004/health",
                     "http://prefect:4200/health",
                 ]
                 prefect_healthy = False

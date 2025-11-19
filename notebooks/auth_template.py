@@ -6,7 +6,7 @@
 import requests
 
 # Configuration
-API_BASE = "http://127.0.0.1:8000"
+API_BASE = "http://localhost:9001"
 AUTH_TOKEN: str | None = None
 API_KEY: str | None = None
 AUTH_HEADERS: dict = {}

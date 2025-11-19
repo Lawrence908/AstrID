@@ -205,7 +205,7 @@ def test_config() -> dict[str, Any]:
         "storage": {"type": "memory", "bucket": "test-bucket"},
         "mlflow": {"tracking_uri": "memory://", "experiment_name": "test_experiment"},
         "prefect": {
-            "api_url": "http://localhost:4200/api",
+            "api_url": "http://localhost:9004/api",
             "workspace": "test-workspace",
         },
         "auth": {

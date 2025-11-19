@@ -67,14 +67,14 @@ docker/
    ```
 
 3. **Access Prefect UI**:
-   - Navigate to http://localhost:4200
+   - Navigate to http://localhost:9004
    - Monitor flows, deployments, and executions
 
 ### Manual Deployment
 
 ```bash
 # Set Prefect API URL
-export PREFECT_API_URL="http://localhost:4200/api"
+export PREFECT_API_URL="http://localhost:9004/api"
 
 # Deploy all flows
 python -m src.adapters.scheduler.deploy
@@ -111,7 +111,7 @@ prefect flow-run ls --limit 10
 
 ```bash
 # Prefect configuration
-PREFECT_API_URL=http://localhost:4200/api
+PREFECT_API_URL=http://localhost:9004/api
 PREFECT_WORK_POOL_NAME=astrid-pool
 
 # Flow schedules (optional overrides)
@@ -187,7 +187,7 @@ graph TD
    ```bash
    # Check Prefect server connection
    prefect profile inspect
-   curl -f http://localhost:4200/api/health
+   curl -f http://localhost:9004/api/health
    ```
 
 2. **Worker not picking up tasks**:
@@ -209,8 +209,8 @@ graph TD
 - **Worker logs**: `docker-compose logs prefect-worker`
 - **Application logs**: `./logs/` directory
 - **Health endpoints**: 
-  - Prefect: http://localhost:4200/health
-  - API: http://127.0.0.1:8000/health
+  - Prefect: http://localhost:9004/health
+  - API: http://localhost:9001/health
 
 ##  Next Steps
 

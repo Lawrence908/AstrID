@@ -7,7 +7,7 @@ This script helps you authenticate and get a JWT token for use in notebooks.
 
 import requests
 
-API_BASE = "http://127.0.0.1:8000"
+API_BASE = "http://localhost:9001"
 
 
 def authenticate_user(email: str, password: str) -> str | None:

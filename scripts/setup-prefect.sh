@@ -13,7 +13,7 @@ if ! command -v prefect &> /dev/null; then
 fi
 
 # Set Prefect API URL (should point to the server in docker-compose)
-export PREFECT_API_URL="http://localhost:4200/api"
+export PREFECT_API_URL="http://localhost:9004/api"
 echo "📡 Setting Prefect API URL to: $PREFECT_API_URL"
 
 # Wait for Prefect server to be ready
@@ -55,7 +55,7 @@ sleep 10
 # Check if deployment is still running
 if kill -0 $DEPLOY_PID 2>/dev/null; then
     echo "⏳ Flow deployment is running in background (PID: $DEPLOY_PID)"
-    echo "   You can check the status in the Prefect UI at http://localhost:4200"
+    echo "   You can check the status in the Prefect UI at http://localhost:9004"
 else
     echo "✅ Flow deployment completed"
 fi
@@ -69,7 +69,7 @@ echo ""
 echo "🎉 Prefect setup completed!"
 echo ""
 echo "📝 Next steps:"
-echo "   1. Check the Prefect UI at http://localhost:4200"
+echo "   1. Check the Prefect UI at http://localhost:9004"
 echo "   2. Start a Prefect worker with: docker-compose up prefect-worker"
 echo "   3. Monitor flows and deployments in the UI"
 echo "   4. Trigger manual runs or wait for scheduled executions"

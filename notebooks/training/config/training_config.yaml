@@ -28,11 +28,11 @@ training:
   num_epochs: 100
   weight_decay: 1e-4
   gradient_clip_norm: 1.0
-  
+
   # Early stopping
   early_stopping_patience: 10
   checkpoint_frequency: 5
-  
+
   # Learning rate scheduling
   scheduler:
     type: "ReduceLROnPlateau"
@@ -46,7 +46,7 @@ data:
   test_split: 0.1
   num_workers: 2
   pin_memory: true
-  
+
   # Data augmentation
   augmentation:
     horizontal_flip: 0.5
@@ -60,7 +60,7 @@ data:
 
 # MLflow Configuration
 mlflow:
-  tracking_uri: "http://localhost:5000"
+  tracking_uri: "http://localhost:9003"
   artifact_root: "r2://astrid-mlflow/artifacts"
   experiment_auto_logging: true
   model_registry_enabled: true
@@ -75,7 +75,7 @@ energy_tracking:
 # Performance Metrics (ASTR-102)
 metrics:
   confidence_threshold: 0.5
-  
+
   # Classification metrics
   classification:
     accuracy: true
@@ -86,17 +86,17 @@ metrics:
     auprc: true
     mcc: true
     balanced_accuracy: true
-  
+
   # Calibration metrics
   calibration:
     ece: true
     brier_score: true
-  
+
   # Performance metrics
   performance:
     latency_percentiles: [50, 95]
     throughput: true
-  
+
   # Artifacts
   artifacts:
     confusion_matrix: true

@@ -9,7 +9,7 @@ This note is the quick launcher for continuing the real-data training work. It c
 
 ### 10-minute bootstrap checklist (dev/staging)
 - Services up: api, worker, prefect, mlflow, redis
-  - Health: `http://127.0.0.1:8000/health`, MLflow UI: `http://localhost:5000`, Prefect: `http://localhost:4200`
+  - Health: `http://127.0.0.1:8000/health`, MLflow UI: `http://localhost:9003`, Prefect: `http://localhost:9004`
 - DB migrated (includes training tables from docs)
 - R2 and DB env vars set
 - **Authenticate with API** (required for RBAC)

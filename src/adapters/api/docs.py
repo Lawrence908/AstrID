@@ -87,7 +87,7 @@ The API supports multiple versioning strategies:
 
     # Add servers (Development first so Swagger defaults to it)
     openapi_schema["servers"] = [
-        {"url": "http://127.0.0.1:8000", "description": "Development server"},
+        {"url": "http://localhost:9001", "description": "Development server"},
         {
             "url": "https://api.astrid.chrislawrence.ca",
             "description": "Production server",

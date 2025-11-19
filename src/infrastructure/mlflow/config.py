@@ -17,7 +17,7 @@ class MLflowConfig:
     """Configuration for MLflow integration."""
 
     # Core MLflow settings
-    tracking_uri: str = "http://localhost:5000"
+    tracking_uri: str = "http://localhost:9003"
     artifact_root: str = "s3://astrid-models"
     database_url: str = ""
 
@@ -48,7 +48,7 @@ class MLflowConfig:
             MLflow configuration instance
         """
         return cls(
-            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:9003"),
             artifact_root=os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://astrid-models"),
             database_url=os.getenv("MLFLOW_DATABASE_URL", ""),
             authentication_enabled=os.getenv("MLFLOW_AUTH_ENABLED", "false").lower()
@@ -83,7 +83,7 @@ class MLflowConfig:
             MLflow configuration instance
         """
         return cls(
-            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:9003"),
             artifact_root=storage_config.mlflow_artifact_root,
             database_url=os.getenv("MLFLOW_DATABASE_URL", ""),
             storage_config=storage_config,

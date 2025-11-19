@@ -33,7 +33,7 @@ export default function AdminPage() {
   const [permissionSet, setPermissionSet] = useState('prefect_workflows')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9001'
 
   const authHeaders = async () => {
     const token = await getToken?.()
