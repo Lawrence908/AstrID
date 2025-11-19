@@ -27,8 +27,8 @@ sys.path.insert(0, str(project_root))
 
 # Configuration
 API_BASE = "http://127.0.0.1:8000"
-MLFLOW_UI = "http://localhost:5000"
-PREFECT_UI = "http://localhost:4200"
+MLFLOW_UI = "http://localhost:9003"
+PREFECT_UI = "http://localhost:9004"
 
 # Test parameters
 TEST_SURVEY_ID = "hst"

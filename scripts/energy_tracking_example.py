@@ -160,7 +160,7 @@ async def main():
     print(
         "1. Run your actual training with: python -m src.adapters.scheduler.flows.model_training"
     )
-    print("2. Check MLflow UI at http://localhost:5000 for energy metrics")
+    print("2. Check MLflow UI at http://localhost:9003 for energy metrics")
     print("3. Use the energy analysis tools in your notebooks")
 
 

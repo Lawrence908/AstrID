@@ -46,9 +46,9 @@ src/domains/ml/flows/
 
 ```bash
 # Prefect Server
-PREFECT_SERVER_URL=http://localhost:4200
-PREFECT_API_URL=http://localhost:4200/api
-PREFECT_UI_URL=http://localhost:4200/ui
+PREFECT_SERVER_URL=http://localhost:9004
+PREFECT_API_URL=http://localhost:9004/api
+PREFECT_UI_URL=http://localhost:9004/ui
 
 # Database
 PREFECT_SUPABASE_PROJECT_REF=your_project_ref
@@ -124,7 +124,7 @@ from src.infrastructure.workflow.config import WorkflowConfig
 
 # Configure workflow
 config = WorkflowConfig(
-    prefect_server_url="http://localhost:4200",
+    prefect_server_url="http://localhost:9004",
     database_url="postgresql://localhost/astrid",
     storage_config=storage_config
 )
@@ -179,7 +179,7 @@ services:
     ports:
       - "4200:4200"
     environment:
-      - PREFECT_API_URL=http://localhost:4200/api
+      - PREFECT_API_URL=http://localhost:9004/api
       - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://...
     command: prefect server start --host 0.0.0.0 --port 4200
 
@@ -324,7 +324,7 @@ docker logs astrid-prefect-dev
 docker logs astrid-prefect-worker-dev
 
 # Check flow status
-curl http://localhost:4200/api/flow_runs/{flow_id}
+curl http://localhost:9004/api/flow_runs/{flow_id}
 ```
 
 ## Future Enhancements

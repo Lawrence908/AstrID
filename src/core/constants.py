@@ -10,7 +10,7 @@ load_dotenv()
 # Application
 APP_VERSION = "0.1.0"  # Using version from core/constants.py
 APP_NAME = "AstrID"
-ASTRID_API_BASE = os.getenv("ASTRID_API_BASE", "http://127.0.0.1:8000")
+ASTRID_API_BASE = os.getenv("ASTRID_API_BASE", "http://localhost:9001")
 
 # Environment
 ENVIRONMENT = os.getenv("APP_ENV", "development")

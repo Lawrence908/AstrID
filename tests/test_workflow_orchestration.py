@@ -36,7 +36,7 @@ def storage_config():
 def workflow_config(storage_config):
     """Create workflow configuration for testing."""
     return WorkflowConfig(
-        prefect_server_url="http://localhost:4200",
+        prefect_server_url="http://localhost:9004",
         database_url="postgresql+asyncpg://localhost/test",
         storage_config=storage_config,
         authentication_enabled=False,
@@ -343,12 +343,12 @@ class TestWorkflowConfig:
     def test_workflow_config_creation(self, storage_config):
         """Test creating workflow configuration."""
         config = WorkflowConfig(
-            prefect_server_url="http://localhost:4200",
+            prefect_server_url="http://localhost:9004",
             database_url="postgresql://localhost/test",
             storage_config=storage_config,
         )
 
-        assert config.prefect_server_url == "http://localhost:4200"
+        assert config.prefect_server_url == "http://localhost:9004"
         assert config.database_url == "postgresql://localhost/test"
         assert config.storage_config == storage_config
         assert config.authentication_enabled is True
@@ -361,13 +361,13 @@ class TestWorkflowConfig:
     def test_workflow_config_defaults(self, storage_config):
         """Test workflow configuration defaults."""
         config = WorkflowConfig(
-            prefect_server_url="http://localhost:4200",
+            prefect_server_url="http://localhost:9004",
             database_url="postgresql://localhost/test",
             storage_config=storage_config,
         )
 
-        assert config.prefect_api_url == "http://localhost:4200/api"
-        assert config.prefect_ui_url == "http://localhost:4200/ui"
+        assert config.prefect_api_url == "http://localhost:9004/api"
+        assert config.prefect_ui_url == "http://localhost:9004/ui"
         assert config.prefect_work_pool == "default"
         assert config.prefect_work_queue == "default"
         assert config.metrics_retention_days == 30

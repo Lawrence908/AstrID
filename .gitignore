@@ -226,3 +226,7 @@ certs/
 
 # Old file
 zOLD/*
+
+
+/mlruns/
+/resources/sne-*

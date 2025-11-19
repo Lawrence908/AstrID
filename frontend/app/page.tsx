@@ -129,7 +129,7 @@ export default function Home() {
   const [modelError, setModelError] = useState<string | null>(null)
 
   useEffect(() => {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000'
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9001'
     let isMounted = true
 
     const withTimeout = async (url: string, ms: number) => {
