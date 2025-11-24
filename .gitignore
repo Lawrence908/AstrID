@@ -208,6 +208,9 @@ marimo/_lsp/
 __marimo__/
 
 # FITS files
+/data/fits/
+# old fits files
+/data/fitsOLD/
 *.fits
 *.fit
 *.fts
