@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
-Download FITS files for supernovae based on MAST query results.
+Robust supernova FITS downloader with validation, filtering, and reporting.
 
-This script reads the JSON output from query_sn_fits_from_catalog.py and downloads
-the actual FITS files for reference and science images.
-
-Usage:
-    python scripts/download_sn_fits.py --query-results output/sn_mast_queries.json --output-dir data/fits
+The script reads query output produced by `query_sn_fits_from_catalog.py`,
+filters out observations that cannot be downloaded, and fetches only the
+imaging products required for building before/after pairs.
 """
 
+from __future__ import annotations
+
 import argparse
-import asyncio
 import json
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from astropy.io import fits
+from astropy.wcs import WCS
 
 # Setup logging
 logging.basicConfig(
@@ -23,315 +27,613 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Constants / heuristics for filtering data products
+# ---------------------------------------------------------------------------
 
-def download_observation_fits(
+IMAGING_PRODUCT_KEYWORDS = [
+    "image",
+    "img",
+    "int",
+    "rrhr",
+    "skybg",
+    "flags",
+    "stk",
+    "skycell",
+    "unconv",
+    "mast:ps1",
+    ".fits",
+    ".fits.gz",
+    ".img",
+]
+
+SPECTROSCOPY_PRODUCT_KEYWORDS = [
+    "spec",
+    "spectrum",
+    "spectra",
+    "spall",
+    "spplate",
+    "spz",
+    "spAllLine",
+    "allspec",
+]
+
+CATALOG_PRODUCT_KEYWORDS = [
+    "catalog",
+    "combined",
+    "_v5_",
+    "table",
+    "summary",
+]
+
+MAX_FILE_SIZE_MB = 500
+DEFAULT_MAX_OBS = 3
+
+
+@dataclass
+class PrefilterStats:
+    total_supernovae: int = 0
+    viable_supernovae: int = 0
+    reference_only: int = 0
+    science_only: int = 0
+    neither: int = 0
+    total_reference_obs: int = 0
+    total_science_obs: int = 0
+
+
+@dataclass
+class DownloadStats:
+    reference_files: int = 0
+    science_files: int = 0
+    valid_files: int = 0
+    invalid_files: int = 0
+    complete_pairs: int = 0
+    errors: int = 0
+
+
+def human_readable_size(num_bytes: Any) -> str:
+    """Convert byte counts to a readable string."""
+    if num_bytes in (None, ""):
+        return "unknown size"
+    try:
+        size = float(num_bytes)
+    except (TypeError, ValueError):
+        return "unknown size"
+    units = ["bytes", "KB", "MB", "GB", "TB"]
+    for unit in units:
+        if size < 1024.0 or unit == units[-1]:
+            if unit == "bytes":
+                return f"{size:.0f} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PB"
+
+
+def validate_observation_data(observation: dict[str, Any]) -> bool:
+    """Quick check to ensure an observation has a downloadable data URL."""
+    if not observation:
+        return False
+    data_url = observation.get("dataURL") or observation.get("dataurl")
+    return bool(observation.get("obs_id") and observation.get("mission") and data_url)
+
+
+def prefilter_query_results(
+    query_results: Sequence[dict[str, Any]],
+    require_both: bool,
+) -> tuple[list[dict[str, Any]], PrefilterStats]:
+    """Filter observations without download URLs and compute stats."""
+    stats = PrefilterStats(total_supernovae=len(query_results))
+    filtered: list[dict[str, Any]] = []
+
+    for entry in query_results:
+        sn_name = entry.get("sn_name", "UNKNOWN")
+        ref_obs = [
+            obs
+            for obs in entry.get("reference_observations", [])
+            if validate_observation_data(obs)
+        ]
+        sci_obs = [
+            obs
+            for obs in entry.get("science_observations", [])
+            if validate_observation_data(obs)
+        ]
+
+        if not ref_obs and not sci_obs:
+            stats.neither += 1
+            continue
+
+        if require_both:
+            if not ref_obs and sci_obs:
+                stats.science_only += 1
+                continue
+            if not sci_obs and ref_obs:
+                stats.reference_only += 1
+                continue
+
+        if not ref_obs:
+            stats.reference_only += 1
+        if not sci_obs:
+            stats.science_only += 1
+
+        stats.viable_supernovae += 1
+        stats.total_reference_obs += len(ref_obs)
+        stats.total_science_obs += len(sci_obs)
+
+        filtered.append(
+            {
+                **entry,
+                "sn_name": sn_name,
+                "reference_observations": ref_obs,
+                "science_observations": sci_obs,
+            }
+        )
+
+    return filtered, stats
+
+
+def log_prefilter_report(stats: PrefilterStats, mode_label: str) -> None:
+    """Print a detailed pre-filtering report."""
+    logger.info("\n" + "=" * 60)
+    logger.info("PRE-FILTERING QUERY RESULTS")
+    logger.info("=" * 60)
+    logger.info("Mode: %s", mode_label)
+    logger.info("")
+    logger.info("Filtering results:")
+    logger.info("  Total supernovae in query: %s", stats.total_supernovae)
+    logger.info("  ✅ With both ref & sci (viable): %s", stats.viable_supernovae)
+    logger.info("  ⚠️  Reference only: %s", stats.reference_only)
+    logger.info("  ⚠️  Science only: %s", stats.science_only)
+    logger.info("  ❌ Neither: %s", stats.neither)
+    logger.info("")
+    logger.info("  Total viable reference observations: %s", stats.total_reference_obs)
+    logger.info("  Total viable science observations: %s", stats.total_science_obs)
+    logger.info("")
+    logger.info("  Supernovae to process: %s", stats.viable_supernovae)
+    logger.info("=" * 60)
+
+
+def filter_products(table: Any) -> Any:
+    """Return only imaging products under size threshold."""
+    if len(table) == 0:
+        return table
+
+    indices: list[int] = []
+    for idx, row in enumerate(table):
+        filename = str(row.get("productFilename", "")).lower()
+        subgroup = str(row.get("productSubGroupDescription", "")).lower()
+        description = str(row.get("description", "")).lower()
+
+        if not filename:
+            continue
+
+        if any(keyword in filename for keyword in SPECTROSCOPY_PRODUCT_KEYWORDS):
+            continue
+        if any(keyword in description for keyword in SPECTROSCOPY_PRODUCT_KEYWORDS):
+            continue
+        if any(keyword in filename for keyword in CATALOG_PRODUCT_KEYWORDS):
+            continue
+
+        looks_imaging = any(
+            keyword in filename for keyword in IMAGING_PRODUCT_KEYWORDS
+        ) or any(keyword in subgroup for keyword in IMAGING_PRODUCT_KEYWORDS)
+        if not looks_imaging:
+            continue
+
+        file_size = row.get("size") or row.get("filesize") or row.get("fileSize")
+        if file_size:
+            size_mb = float(file_size) / (1024 * 1024)
+            if size_mb > MAX_FILE_SIZE_MB:
+                continue
+
+        indices.append(idx)
+
+    return table[indices] if indices else table[:0]
+
+
+def extract_manifest_paths(manifest: Any) -> list[Path]:
+    """Extract downloaded file paths from astroquery manifest."""
+    paths: list[Path] = []
+    if manifest is None:
+        return paths
+
+    if hasattr(manifest, "colnames") and "Local Path" in manifest.colnames:
+        for row in manifest:
+            local_path = row.get("Local Path")
+            if local_path:
+                path_obj = Path(local_path)
+                if path_obj.exists():
+                    paths.append(path_obj)
+    elif isinstance(manifest, dict) and "Local Path" in manifest:
+        for local_path in manifest.get("Local Path", []):
+            path_obj = Path(local_path)
+            if path_obj.exists():
+                paths.append(path_obj)
+    elif hasattr(manifest, "to_pandas"):
+        df = manifest.to_pandas()
+        if "Local Path" in df.columns:
+            for local_path in df["Local Path"].dropna():
+                path_obj = Path(str(local_path))
+                if path_obj.exists():
+                    paths.append(path_obj)
+    return paths
+
+
+def verify_fits_file(file_path: Path) -> dict[str, Any]:
+    """Open a FITS file and verify it contains WCS information."""
+    info = {
+        "file": str(file_path),
+        "valid": False,
+        "has_wcs": False,
+        "observation_time": None,
+        "filter": None,
+        "error": None,
+    }
+    try:
+        with fits.open(file_path) as hdul:
+            header = hdul[0].header
+            info["observation_time"] = header.get("DATE-OBS") or header.get("MJD-OBS")
+            info["filter"] = (
+                header.get("FILTER") or header.get("FILT") or header.get("BAND")
+            )
+            try:
+                wcs = WCS(header)
+                info["has_wcs"] = wcs.has_celestial
+            except Exception as exc:  # pragma: no cover - defensive
+                info["error"] = f"WCS parsing error: {exc}"
+                info["has_wcs"] = False
+            info["valid"] = bool(info["has_wcs"])
+    except Exception as exc:  # pragma: no cover - defensive
+        info["error"] = str(exc)
+    return info
+
+
+def download_products_for_observation(
     obs_id: str,
     mission: str,
-    output_dir: Path,
-    product_type: str = "SCIENCE",
+    destination_dir: Path,
 ) -> list[Path]:
-    """Download FITS files for a single observation.
-    
-    Args:
-        obs_id: MAST observation ID
-        mission: Mission name (e.g., 'HST', 'JWST')
-        output_dir: Directory to save FITS files
-        product_type: Type of product to download ('SCIENCE', 'DRZ', etc.)
-    
-    Returns:
-        List of downloaded file paths
-    """
-    try:
-        from astroquery.mast import Observations
-        
-        logger.info(f"Getting data products for {mission} observation: {obs_id}")
-        
-        # Get list of available products
-        products = Observations.get_product_list(obs_id)
-        
-        if len(products) == 0:
-            logger.warning(f"No data products found for {obs_id}")
-            return []
-        
-        # Filter for science products (FITS files)
-        # astroquery returns astropy Table, not pandas DataFrame
-        # Convert to list of indices that match our criteria
-        import numpy as np
-        
-        matching_indices = []
-        for i, row in enumerate(products):
-            sub_group = str(row.get('productSubGroupDescription', '')).upper()
-            filename = str(row.get('productFilename', ''))
-            
-            # Check if it's a science product
-            if (sub_group in ['SCI', 'DRZ'] or 
-                'FITS' in sub_group or 
-                filename.upper().endswith('.FITS')):
-                matching_indices.append(i)
-        
-        if len(matching_indices) == 0:
-            # Fallback: take first product that's a FITS file
-            for i, row in enumerate(products):
-                filename = str(row.get('productFilename', ''))
-                if filename.upper().endswith('.FITS'):
-                    matching_indices.append(i)
-                    break
-        
-        if len(matching_indices) == 0:
-            logger.warning(f"No FITS products found for {obs_id}")
-            return []
-        
-        # Select matching products
-        science_products = products[matching_indices]
-        logger.info(f"Found {len(science_products)} science products for {obs_id}")
-        
-        # Create output directory
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Download products
-        logger.info(f"Downloading {len(science_products)} products for {obs_id}")
-        manifest = Observations.download_products(
-            science_products,
-            download_dir=str(output_dir),
-            mrp_only=False  # Download all products, not just minimum recommended
+    """Download imaging products for a single observation."""
+    from astroquery.mast import Observations
+
+    products = Observations.get_product_list(obs_id, mrp_only=True)
+    total = len(products)
+    if total == 0:
+        logger.warning("No products found for %s %s", mission, obs_id)
+        return []
+
+    filtered = filter_products(products)
+    logger.info(
+        "Found %s imaging products for %s (filtered from %s total)",
+        len(filtered),
+        obs_id,
+        total,
+    )
+
+    if len(filtered) == 0:
+        logger.warning("No imaging products remained after filtering for %s", obs_id)
+        return []
+
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = Observations.download_products(
+        filtered,
+        download_dir=str(destination_dir),
+        cache=True,
+        mrp_only=True,
+    )
+    downloaded = extract_manifest_paths(manifest)
+    logger.info("Downloaded %s files for %s", len(downloaded), obs_id)
+    return downloaded
+
+
+def run_dry_run(
+    sn_name: str,
+    observations: Sequence[dict[str, Any]],
+    obs_type: str,
+) -> None:
+    """Log what would be downloaded during a dry run."""
+    logger.info(
+        "[DRY RUN] Would download %s %s observations", len(observations), obs_type
+    )
+    for idx, obs in enumerate(observations, 1):
+        mission = obs.get("mission", "Unknown")
+        obs_id = obs.get("obs_id", "Unknown")
+        filesize = obs.get("filesize")
+        logger.info(
+            "  [%s/%s] %s %s (%s)",
+            idx,
+            len(observations),
+            mission,
+            obs_id,
+            human_readable_size(filesize),
         )
-        
-        # Find downloaded files
-        downloaded_files = []
-        if manifest is not None and len(manifest) > 0:
-            # Check if manifest has 'Local Path' column (astropy Table)
-            if 'Local Path' in manifest.colnames:
-                for row in manifest:
-                    path = str(row.get('Local Path', ''))
-                    if path and Path(path).exists():
-                        downloaded_files.append(Path(path))
-            # Also check for pandas-style column access
-            elif hasattr(manifest, 'columns') and 'Local Path' in manifest.columns:
-                for path in manifest['Local Path']:
-                    if path and Path(path).exists():
-                        downloaded_files.append(Path(path))
-        
-        # Fallback: search for downloaded files by filename
-        if len(downloaded_files) == 0:
-            for row in science_products:
-                filename = str(row.get('productFilename', ''))
-                if filename:
-                    file_path = output_dir / filename
-                    if file_path.exists():
-                        downloaded_files.append(file_path)
-                    # Also check for files with different extensions or names
-                    # MAST sometimes downloads with different names
-                    for existing_file in output_dir.glob(f"*{filename.split('.')[0]}*"):
-                        if existing_file.suffix.lower() in ['.fits', '.fit']:
-                            downloaded_files.append(existing_file)
-                            break
-        
-        logger.info(f"Downloaded {len(downloaded_files)} files for {obs_id}")
-        return downloaded_files
-        
-    except ImportError:
-        logger.error("astroquery.mast not available. Install with: pip install astroquery")
-        return []
-    except Exception as e:
-        logger.error(f"Error downloading {obs_id}: {e}")
-        return []
 
 
-async def download_supernova_fits(
-    sn_result: dict[str, Any],
-    output_base_dir: Path,
-    download_reference: bool = True,
-    download_science: bool = True,
-    max_obs_per_type: int = 5,
-) -> dict[str, Any]:
-    """Download FITS files for a single supernova.
-    
-    Args:
-        sn_result: Supernova query result from query_sn_fits_from_catalog.py
-        output_base_dir: Base directory for downloads
-        download_reference: Whether to download reference images
-        download_science: Whether to download science images
-        max_obs_per_type: Maximum observations to download per type
-    
-    Returns:
-        Dictionary with download results
-    """
-    sn_name = sn_result["sn_name"]
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Processing {sn_name}")
-    logger.info(f"{'='*60}")
-    
-    result = {
-        "sn_name": sn_name,
-        "reference_files": [],
-        "science_files": [],
-        "errors": [],
-    }
-    
-    # Create subdirectory for this supernova
-    sn_dir = output_base_dir / sn_name.replace("/", "_")
-    sn_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Download reference images
-    if download_reference:
-        ref_obs = sn_result.get("reference_observations", [])[:max_obs_per_type]
-        logger.info(f"Downloading {len(ref_obs)} reference observations")
-        
-        ref_dir = sn_dir / "reference"
-        for i, obs in enumerate(ref_obs, 1):
-            obs_id = obs.get("obs_id", "")
-            mission = obs.get("mission", "Unknown")
-            
-            logger.info(f"[{i}/{len(ref_obs)}] Reference: {mission} {obs_id}")
-            
-            try:
-                files = download_observation_fits(obs_id, mission, ref_dir)
-                result["reference_files"].extend([str(f) for f in files])
-            except Exception as e:
-                error_msg = f"Failed to download reference {obs_id}: {e}"
-                logger.error(error_msg)
-                result["errors"].append(error_msg)
-    
-    # Download science images
-    if download_science:
-        sci_obs = sn_result.get("science_observations", [])[:max_obs_per_type]
-        logger.info(f"Downloading {len(sci_obs)} science observations")
-        
-        sci_dir = sn_dir / "science"
-        for i, obs in enumerate(sci_obs, 1):
-            obs_id = obs.get("obs_id", "")
-            mission = obs.get("mission", "Unknown")
-            
-            logger.info(f"[{i}/{len(sci_obs)}] Science: {mission} {obs_id}")
-            
-            try:
-                files = download_observation_fits(obs_id, mission, sci_dir)
-                result["science_files"].extend([str(f) for f in files])
-            except Exception as e:
-                error_msg = f"Failed to download science {obs_id}: {e}"
-                logger.error(error_msg)
-                result["errors"].append(error_msg)
-    
-    # Summary
-    logger.info(f"{sn_name}: {len(result['reference_files'])} reference, {len(result['science_files'])} science files")
-    
-    return result
+def process_observation_batch(
+    sn_dir: Path,
+    observations: Sequence[dict[str, Any]],
+    obs_type: str,
+    verify_fits: bool,
+    dry_run: bool,
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """Download and verify all observations for a single SN/type."""
+    downloaded: list[str] = []
+    verified: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    if dry_run:
+        run_dry_run(sn_dir.name, observations, obs_type)
+        return downloaded, verified, invalid, errors
+
+    target_dir = sn_dir / obs_type
+    for idx, obs in enumerate(observations, 1):
+        obs_id = str(obs.get("obs_id"))
+        mission = obs.get("mission", "Unknown")
+        logger.info(
+            "[%s/%s] %s: %s %s",
+            idx,
+            len(observations),
+            obs_type.capitalize(),
+            mission,
+            obs_id,
+        )
+
+        try:
+            files = download_products_for_observation(obs_id, mission, target_dir)
+            downloaded.extend(str(f) for f in files)
+
+            if verify_fits:
+                for file_path in files:
+                    info = verify_fits_file(file_path)
+                    if info["valid"]:
+                        verified.append(info)
+                        logger.info("  ✅ Verified: %s", Path(info["file"]).name)
+                    else:
+                        invalid.append(info)
+                        logger.warning(
+                            "  ⚠️  Invalid FITS: %s - %s",
+                            Path(info["file"]).name,
+                            info["error"],
+                        )
+        except Exception as exc:  # pragma: no cover - defensive
+            message = f"Failed to download {mission} {obs_id}: {exc}"
+            logger.error(message)
+            errors.append(message)
+
+    return downloaded, verified, invalid, errors
 
 
-async def main():
-    """Main entry point."""
+def build_observation_subset(
+    observations: Sequence[dict[str, Any]],
+    max_obs: int,
+) -> list[dict[str, Any]]:
+    """Return the first N observations, preserving existing order."""
+    return list(observations[:max_obs])
+
+
+def build_mode_label(require_both: bool) -> str:
+    return (
+        "Require both reference AND science"
+        if require_both
+        else "Allow partial (reference OR science)"
+    )
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Download FITS files for supernovae from MAST query results"
+        description="Download supernova FITS files from MAST results"
     )
     parser.add_argument(
         "--query-results",
         type=Path,
         required=True,
-        help="JSON file from query_sn_fits_from_catalog.py",
+        help="Path to JSON produced by query_sn_fits_from_catalog.py",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("data/fits"),
-        help="Base directory for downloaded FITS files",
+        help="Directory where downloads are stored (default: data/fits)",
     )
     parser.add_argument(
         "--max-obs",
         type=int,
-        default=5,
-        help="Maximum observations to download per type (reference/science) per supernova",
-    )
-    parser.add_argument(
-        "--skip-reference",
-        action="store_true",
-        help="Skip downloading reference images",
-    )
-    parser.add_argument(
-        "--skip-science",
-        action="store_true",
-        help="Skip downloading science images",
+        default=DEFAULT_MAX_OBS,
+        help="Maximum observations per type per SN (default: 3)",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Limit number of supernovae to process",
+        help="Limit number of supernovae processed",
     )
     parser.add_argument(
-        "--filter-has-both",
-        action="store_true",
-        help="Only process supernovae with both reference and science observations",
+        "--min-viable-pairs",
+        type=int,
+        default=None,
+        help="Abort if fewer than this many viable SN would be processed",
     )
-    
+    parser.add_argument(
+        "--require-both",
+        action="store_true",
+        help="Explicitly require reference AND science observations",
+    )
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Allow SN with only reference OR only science observations",
+    )
+    parser.add_argument(
+        "--verify-fits",
+        dest="verify_fits",
+        action="store_true",
+        default=True,
+        help="Verify downloaded FITS files (default: on)",
+    )
+    parser.add_argument(
+        "--no-verify",
+        dest="verify_fits",
+        action="store_false",
+        help="Skip FITS verification to save time",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview downloads without fetching files",
+    )
+    parser.add_argument(
+        "--skip-reference",
+        action="store_true",
+        help="Skip downloading reference observations",
+    )
+    parser.add_argument(
+        "--skip-science",
+        action="store_true",
+        help="Skip downloading science observations",
+    )
+
     args = parser.parse_args()
-    
-    # Load query results
+
     if not args.query_results.exists():
-        logger.error(f"Query results file not found: {args.query_results}")
-        return
-    
-    logger.info(f"Loading query results from: {args.query_results}")
-    with open(args.query_results) as f:
-        query_results = json.load(f)
-    
-    logger.info(f"Loaded {len(query_results)} supernova query results")
-    
-    # Filter results if requested
-    if args.filter_has_both:
-        filtered = []
-        for result in query_results:
-            ref_count = len(result.get("reference_observations", []))
-            sci_count = len(result.get("science_observations", []))
-            if ref_count > 0 and sci_count > 0:
-                filtered.append(result)
-        query_results = filtered
-        logger.info(f"Filtered to {len(query_results)} supernovae with both reference and science observations")
-    
-    # Limit if specified
-    if args.limit:
-        query_results = query_results[:args.limit]
-        logger.info(f"Limited to {args.limit} supernovae")
-    
-    # Create output directory
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Download FITS files for each supernova
-    download_results = []
-    for i, sn_result in enumerate(query_results, 1):
-        logger.info(f"\n[{i}/{len(query_results)}] Processing supernova")
-        
-        result = await download_supernova_fits(
-            sn_result,
-            args.output_dir,
-            download_reference=not args.skip_reference,
-            download_science=not args.skip_science,
-            max_obs_per_type=args.max_obs,
+        logger.error("Query results file not found: %s", args.query_results)
+        raise SystemExit(1)
+
+    with open(args.query_results) as handle:
+        query_results = json.load(handle)
+
+    require_both = args.require_both or not args.allow_partial
+    mode_label = build_mode_label(require_both)
+
+    filtered_results, pre_stats = prefilter_query_results(
+        query_results, require_both=require_both
+    )
+    log_prefilter_report(pre_stats, mode_label)
+
+    if args.min_viable_pairs and pre_stats.viable_supernovae < args.min_viable_pairs:
+        logger.error(
+            "Only %s viable supernovae found, below --min-viable-pairs=%s. Aborting.",
+            pre_stats.viable_supernovae,
+            args.min_viable_pairs,
         )
-        download_results.append(result)
-    
-    # Save download results
+        raise SystemExit(1)
+
+    if args.limit:
+        filtered_results = filtered_results[: args.limit]
+
+    if not filtered_results:
+        logger.warning("⚠️  No supernovae to process after filtering!")
+        logger.info(
+            "Try running with --allow-partial or adjusting your query parameters."
+        )
+        return
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    download_results: list[dict[str, Any]] = []
+    stats = DownloadStats()
+
+    for idx, sn_entry in enumerate(filtered_results, 1):
+        sn_name = sn_entry.get("sn_name", f"SN_{idx}")
+        logger.info("\n[%s/%s] Processing %s", idx, len(filtered_results), sn_name)
+
+        sn_dir = args.output_dir / sn_name.replace("/", "_")
+        sn_dir.mkdir(parents=True, exist_ok=True)
+
+        ref_obs = build_observation_subset(
+            sn_entry.get("reference_observations", []), max_obs=args.max_obs
+        )
+        sci_obs = build_observation_subset(
+            sn_entry.get("science_observations", []), max_obs=args.max_obs
+        )
+
+        reference_files: list[str] = []
+        science_files: list[str] = []
+        verified_files: list[dict[str, Any]] = []
+        invalid_files: list[dict[str, Any]] = []
+        errors: list[str] = []
+
+        if not args.skip_reference and ref_obs:
+            ref_downloads, ref_verified, ref_invalid, ref_errors = (
+                process_observation_batch(
+                    sn_dir, ref_obs, "reference", args.verify_fits, args.dry_run
+                )
+            )
+            reference_files.extend(ref_downloads)
+            verified_files.extend(ref_verified)
+            invalid_files.extend(ref_invalid)
+            errors.extend(ref_errors)
+
+        if not args.skip_science and sci_obs:
+            sci_downloads, sci_verified, sci_invalid, sci_errors = (
+                process_observation_batch(
+                    sn_dir, sci_obs, "science", args.verify_fits, args.dry_run
+                )
+            )
+            science_files.extend(sci_downloads)
+            verified_files.extend(sci_verified)
+            invalid_files.extend(sci_invalid)
+            errors.extend(sci_errors)
+
+        stats.reference_files += len(reference_files)
+        stats.science_files += len(science_files)
+        stats.valid_files += len([item for item in verified_files if item.get("valid")])
+        stats.invalid_files += len(invalid_files)
+        stats.errors += len(errors)
+        if reference_files and science_files:
+            stats.complete_pairs += 1
+
+        download_results.append(
+            {
+                "sn_name": sn_name,
+                "reference_files": reference_files,
+                "science_files": science_files,
+                "verified_files": verified_files,
+                "invalid_files": invalid_files,
+                "errors": errors,
+            }
+        )
+
     results_file = args.output_dir / "download_results.json"
-    with open(results_file, "w") as f:
-        json.dump(download_results, f, indent=2, default=str)
-    
-    logger.info(f"\nDownload results saved to: {results_file}")
-    
-    # Print summary
-    total_ref = sum(len(r["reference_files"]) for r in download_results)
-    total_sci = sum(len(r["science_files"]) for r in download_results)
-    total_errors = sum(len(r["errors"]) for r in download_results)
-    
+    with open(results_file, "w") as handle:
+        json.dump(download_results, handle, indent=2)
+
+    logger.info("\nDownload results saved to: %s", results_file)
     logger.info("\n" + "=" * 60)
     logger.info("DOWNLOAD SUMMARY")
     logger.info("=" * 60)
-    logger.info(f"Supernovae processed: {len(download_results)}")
-    logger.info(f"Total reference files: {total_ref}")
-    logger.info(f"Total science files: {total_sci}")
-    logger.info(f"Total errors: {total_errors}")
-    logger.info(f"Output directory: {args.output_dir}")
+    logger.info("Supernovae processed: %s", len(download_results))
+    logger.info("  ✅ Complete before/after pairs: %s", stats.complete_pairs)
+    logger.info("")
+    logger.info("Files downloaded:")
+    logger.info("  Reference files: %s", stats.reference_files)
+    logger.info("  Science files: %s", stats.science_files)
+    logger.info("  Total: %s", stats.reference_files + stats.science_files)
+    logger.info("")
+    logger.info("FITS validation:")
+    logger.info("  ✅ Valid files: %s", stats.valid_files)
+    logger.info("  ❌ Invalid files: %s", stats.invalid_files)
+    total_checked = stats.valid_files + stats.invalid_files
+    success_rate = (stats.valid_files / total_checked * 100) if total_checked else 0.0
+    logger.info("  Success rate: %.1f%%", success_rate)
+    logger.info("")
+    logger.info("⚠️  Total errors: %s", stats.errors)
+    logger.info("")
+    logger.info("Output directory: %s", args.output_dir)
     logger.info("=" * 60)
+    if stats.complete_pairs:
+        logger.info(
+            "\n✅ Ready for differencing: %s supernovae with complete before/after pairs",
+            stats.complete_pairs,
+        )
+        logger.info(
+            "   Next step: Run ingest_sn_fits_to_pipeline.py to process these files"
+        )
+    else:
+        logger.info(
+            "\n⚠️  No complete before/after pairs were created. Consider relaxing filters."
+        )
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    main()
