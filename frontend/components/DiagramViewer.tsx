@@ -76,7 +76,7 @@ export default function DiagramViewer({ file }: DiagramViewerProps) {
 
   // Touch: pinch-zoom and one-finger pan
   const lastTouchDistance = useRef<number | null>(null)
-  const getDistance = (a: Touch, b: Touch) => {
+  const getDistance = (a: React.Touch, b: React.Touch) => {
     const dx = a.clientX - b.clientX
     const dy = a.clientY - b.clientY
     return Math.hypot(dx, dy)

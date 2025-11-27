@@ -35,11 +35,13 @@ export default function AdminPage() {
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9001'
 
-  const authHeaders = async () => {
+  const authHeaders = async (): Promise<Record<string, string>> => {
     const token = await getToken?.()
-    return token
-      ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-      : { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    return headers
   }
 
   const fetchKeys = async () => {
