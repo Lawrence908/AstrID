@@ -1,3 +1,5 @@
+# Primary registry: GitHub Container Registry (GHCR)
+# Docker Hub targets (build-prod, push-prod) are deprecated - use GHCR instead
 REGISTRY ?= chrislawrencedev
 PROJECT ?= astrid
 GITHUB_USER ?= Lawrence908
@@ -21,12 +23,15 @@ build-dev:
 push-dev:
 	docker compose -f docker-compose.yaml push
 
+# Docker Hub targets (deprecated - use build-ghcr/push-ghcr instead)
 build-prod:
+	@echo "WARNING: Docker Hub is deprecated. Use 'make build-ghcr' instead."
 	@for tag in latest git-$(GIT_SHA); do \
 		$(MAKE) build-tag TAG=$$tag; \
 	done
 
 push-prod:
+	@echo "WARNING: Docker Hub is deprecated. Use 'make push-ghcr' instead."
 	@for tag in latest git-$(GIT_SHA); do \
 		$(MAKE) push-tag TAG=$$tag; \
 	done

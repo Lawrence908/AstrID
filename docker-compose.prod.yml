@@ -25,7 +25,7 @@ services:
     image: ghcr.io/lawrence908/astrid-mlflow:latest
     container_name: astrid-mlflow
     env_file:
-      - .env.prod
+      - .env
     environment:
       - MLFLOW_BACKEND_URI=postgresql+psycopg2://postgres.${MLFLOW_SUPABASE_PROJECT_REF}:${MLFLOW_SUPABASE_PASSWORD}@${MLFLOW_SUPABASE_HOST}/postgres?connect_timeout=10
       - MLFLOW_ARTIFACT_ROOT=s3://astrid-models
@@ -49,7 +49,7 @@ services:
     image: ghcr.io/lawrence908/astrid-prefect-server:latest
     container_name: astrid-prefect
     env_file:
-      - .env.prod
+      - .env
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
       - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
@@ -73,7 +73,7 @@ services:
     image: ghcr.io/lawrence908/astrid-api:latest
     container_name: astrid-api
     env_file:
-      - .env.prod
+      - .env
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -97,7 +97,7 @@ services:
     image: ghcr.io/lawrence908/astrid-worker:latest
     container_name: astrid-worker
     env_file:
-      - .env.prod
+      - .env
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -120,7 +120,7 @@ services:
     container_name: astrid-prefect-worker
     restart: unless-stopped
     env_file:
-      - .env.prod
+      - .env
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
       - PREFECT_WORK_POOL_NAME=astrid-pool
@@ -150,7 +150,7 @@ services:
     image: ghcr.io/lawrence908/astrid-frontend:latest
     container_name: astrid-frontend
     env_file:
-      - .env.prod
+      - .env
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://api:8000}
@@ -180,8 +180,23 @@ services:
 
 volumes:
   redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/storage/apps/astrid/redis_data
   logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/storage/apps/astrid/logs
   organizr_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/storage/apps/astrid/organizr_config
 
 networks:
   astrid-network:
