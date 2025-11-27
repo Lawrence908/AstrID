@@ -1,0 +1,188 @@
+# Production compose file for Hephaestus / cloud hosts.
+# Usage:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: astrid-redis
+    restart: unless-stopped
+    command: redis-server --requirepass "${REDIS_PASSWORD}" --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - astrid-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mlflow:
+    image: ghcr.io/lawrence908/astrid-mlflow:latest
+    container_name: astrid-mlflow
+    env_file:
+      - .env.prod
+    environment:
+      - MLFLOW_BACKEND_URI=postgresql+psycopg2://postgres.${MLFLOW_SUPABASE_PROJECT_REF}:${MLFLOW_SUPABASE_PASSWORD}@${MLFLOW_SUPABASE_HOST}/postgres?connect_timeout=10
+      - MLFLOW_ARTIFACT_ROOT=s3://astrid-models
+      - MLFLOW_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=auto
+    ports:
+      - "9003:5000"
+    volumes:
+      - ./certs:/app/certs:ro
+    networks:
+      - astrid-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prefect:
+    image: ghcr.io/lawrence908/astrid-prefect-server:latest
+    container_name: astrid-prefect
+    env_file:
+      - .env.prod
+    environment:
+      - PREFECT_API_URL=http://prefect:4200/api
+      - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+      - PREFECT_SUPABASE_SSL_CERT_PATH=/app/certs/prod-ca-2021.crt
+    ports:
+      - "9004:4200"
+    volumes:
+      - ./certs:/app/certs:ro
+    networks:
+      - astrid-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api:
+    image: ghcr.io/lawrence908/astrid-api:latest
+    container_name: astrid-api
+    env_file:
+      - .env.prod
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - DEBUG=false
+    ports:
+      - "9001:8000"
+    volumes:
+      - logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    networks:
+      - astrid-network
+
+  worker:
+    image: ghcr.io/lawrence908/astrid-worker:latest
+    container_name: astrid-worker
+    env_file:
+      - .env.prod
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - DEBUG=false
+    volumes:
+      - logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    networks:
+      - astrid-network
+
+  prefect-worker:
+    image: ghcr.io/lawrence908/astrid-prefect-worker:latest
+    container_name: astrid-prefect-worker
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - PREFECT_API_URL=http://prefect:4200/api
+      - PREFECT_WORK_POOL_NAME=astrid-pool
+      - PREFECT_EVENTS_CLIENT_DISABLE=true
+      - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
+      - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
+      - PREFECT_SUPABASE_HOST=${PREFECT_SUPABASE_HOST}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT_URL=${CLOUDFLARE_R2_ENDPOINT_URL}
+      - PREFECT_WAIT_MAX_RETRIES=30
+      - PREFECT_WAIT_DELAY=2.0
+    volumes:
+      - ./certs:/app/certs:ro
+      - logs:/app/logs
+    depends_on:
+      prefect:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - astrid-network
+
+  frontend:
+    image: ghcr.io/lawrence908/astrid-frontend:latest
+    container_name: astrid-frontend
+    env_file:
+      - .env.prod
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://api:8000}
+      - PORT=3000
+    ports:
+      - "9002:3000"
+    networks:
+      - astrid-network
+    depends_on:
+      api:
+        condition: service_started
+
+  organizr:
+    image: organizr/organizr:latest
+    container_name: astrid-organizr
+    restart: unless-stopped
+    ports:
+      - "9005:80"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - organizr_config:/config
+    networks:
+      - astrid-network
+
+volumes:
+  redis_data:
+  logs:
+  organizr_config:
+
+networks:
+  astrid-network:
+    driver: bridge

@@ -76,12 +76,13 @@ docker-compose*.yml
 .dockerignore
 
 # Documentation
-docs/
+# docs/ - commented out: needed for frontend build sync-docs script
 *.md
 !README.md
+!docs/**/*.md
 
 # Frontend (if building separately)
-frontend/
+# frontend/ - commented out: needed when building frontend with repo root context
 node_modules/
 
 # Temporary files

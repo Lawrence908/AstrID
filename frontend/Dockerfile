@@ -4,19 +4,23 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY next.config.js ./
-COPY tailwind.config.js ./
-COPY postcss.config.js ./
-COPY tsconfig.json ./
+COPY frontend/package*.json ./
+COPY frontend/next.config.js ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
+COPY frontend/tsconfig.json ./
 
-# Install all dependencies (including dev for build)
-RUN npm install
+# Install rsync for sync-docs script and all dependencies
+RUN apk add --no-cache rsync && \
+    npm install
 
-# Copy source code
-COPY app/ ./app/
-COPY components/ ./components/
-COPY public/ ./public/
+# Copy source code and docs (for sync-docs script)
+COPY frontend/app/ ./app/
+COPY frontend/components/ ./components/
+COPY frontend/lib/ ./lib/
+COPY frontend/src/ ./src/
+COPY frontend/public/ ./public/
+COPY docs/ ../docs/
 
 # Build the application
 RUN npm run build

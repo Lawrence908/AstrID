@@ -98,7 +98,7 @@ AstrID provides a comprehensive REST API for:
 
 ## Documentation
 
-For detailed documentation, development guides, and deployment information, please visit our documentation site or check the project wiki.
+For container workflow guidance (build → push → deploy), see `docs/docker.md`. For additional documentation, development guides, and deployment information, please visit our documentation site or check the project wiki.
 
 ## License
 
