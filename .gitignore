@@ -221,6 +221,7 @@ __marimo__/
 *.fit.tar.gz
 *.fit.tar.bz2
 /output/fits_downloads/
+/output/
 
 # Certs
 certs/
