@@ -235,7 +235,7 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/New_York
+      - TZ=America/Vancouver
     volumes:
       - organizr_config:/config
     networks:
