@@ -23,22 +23,16 @@ Root
   - `api/`: API-specific docs and references.
   - `architecture.md`: System architecture overview.
   - `database-schema-design.md`: Database schema design notes.
-  - `deep-research.md`: Research notes and deep-dives.
   - `design-overview.md`: High-level design decisions and rationale.
   - `development.md`: Developer setup and workflows.
   - `diagrams/`: Architecture and workflow diagrams.
   - `file-structure.md`: This file; repository layout and descriptions.
   - `guides/`: How-to guides and operational runbooks.
-  - `linear/`: Planning and ticketing exports/notes.
   - `logging-guide.md`: Logging patterns and guidance.
-  - `meetings/`: Meeting notes and summaries.
+  - `research/`: Research papers and pipeline guides.
   - `tech-stack.md`: Technology stack summary and versions.
   - `test-framework-summary.md`: Testing strategy and tooling.
-  - `tickets/`: Ticket drafts and planning notes.
-  - `training-data-pipeline.md`: End-to-end training data pipeline.
-  - `viu/`: Visualization/UI related docs.
-  - `workflow-orchestration-setup.md`: Prefect/flow setup instructions.
-  - `workflow-orchestration.md`: Orchestration concepts and usage.
+  - `archive/`: Archived documentation (historical reference).
 - `examples/`: Example scripts and usage snippets.
 - `frontend/`: Web UI application (separate frontend codebase).
 - `htmlcov/`: Test coverage HTML reports.
@@ -46,21 +40,22 @@ Root
 - `LICENSE`: MIT license file.
 - `logs/`: Log outputs from local/dev runs.
 - `notebooks/`: Jupyter notebooks and experimentation assets.
-  - `API_KEYS_IMPLEMENTATION.md`: Notes for API key usage in notebooks.
-  - `auth_helper.py`: Helper utilities for authenticated notebook calls.
-  - `auth_template.py`: Template for storing auth credentials in notebooks.
-  - `create_api_key.py`: Utility to create API keys via the API.
-  - `data/`: Sample data used by notebooks.
-  - `logs/`: Notebook-generated logs.
-  - `ml_training_data/`: ML training data exploration notebooks/utilities.
-  - `notebook_processing_results/`: Outputs/results from notebook runs.
+  - `supernova_training_pipeline.ipynb`: Main training pipeline notebook.
+  - `fits_viewer.ipynb`: FITS file viewing utility.
   - `training/`: Training workflows and experimentation notebooks.
-  - `test_storage/`: Storage-related test notebooks and helpers.
-  - `processing.ipynb`, `simple_ingestion_test.ipynb`, `training_data_pipeline_test.ipynb`, `astrXX_testing.ipynb`: Exploration and testing notebooks.
-  - `test_api_keys.py`, `test_training_pipeline.py`: Notebook-oriented tests.
+  - `archive/`: Archived notebooks (historical reference).
 - `pyproject.toml`: Python project configuration, dependencies, and tooling.
 - `README.md`: Project overview, features, and quickstart.
 - `scripts/`: Operational and developer scripts.
+  - `README.md`: Comprehensive scripts documentation.
+  - `download_sn_fits.py`: FITS downloader from MAST.
+  - `query_sn_fits_from_catalog.py`: MAST query script.
+  - `query_sn_fits_chunked.py`: Chunked queries for large datasets.
+  - `generate_difference_images.py`: Difference image generation.
+  - `organize_training_pairs.py`: Training data organization.
+  - `compile_supernova_catalog.py`: Catalog compilation.
+  - `audit_sn_downloads.py`: Download audit utility.
+  - `archive/`: Archived scripts (historical reference).
 - `src/`: Application source code (DDD-aligned: domains, adapters, core, infrastructure).
   - `__init__.py`: Marks `src` as a package.
   - `adapters/`: Framework and external integration layer.
