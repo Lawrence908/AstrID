@@ -41,6 +41,10 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=1000]  # 1MB limit
+        exclude: |
+          (?x)^(
+            notebooks/archive/.*
+          )$
 
       # Python specific
       - id: check-ast
