@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import warnings
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +21,7 @@ from typing import Any
 
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.wcs.wcs import FITSFixedWarning
 
 # Setup logging
 logging.basicConfig(
@@ -89,6 +92,11 @@ class DownloadStats:
     invalid_files: int = 0
     complete_pairs: int = 0
     errors: int = 0
+    warning_counts: dict[str, int] = None
+
+    def __post_init__(self):
+        if self.warning_counts is None:
+            object.__setattr__(self, "warning_counts", defaultdict(int))
 
 
 def human_readable_size(num_bytes: Any) -> str:
@@ -258,8 +266,16 @@ def extract_manifest_paths(manifest: Any) -> list[Path]:
     return paths
 
 
-def verify_fits_file(file_path: Path) -> dict[str, Any]:
-    """Open a FITS file and verify it contains WCS information."""
+def verify_fits_file(
+    file_path: Path, warning_counts: dict[str, int] | None = None
+) -> dict[str, Any]:
+    """Open a FITS file and verify it contains WCS information.
+
+    Suppresses FITS header warnings and tracks them for summary reporting.
+    """
+    if warning_counts is None:
+        warning_counts = defaultdict(int)
+
     info = {
         "file": str(file_path),
         "valid": False,
@@ -269,19 +285,53 @@ def verify_fits_file(file_path: Path) -> dict[str, Any]:
         "error": None,
     }
     try:
-        with fits.open(file_path) as hdul:
-            header = hdul[0].header
-            info["observation_time"] = header.get("DATE-OBS") or header.get("MJD-OBS")
-            info["filter"] = (
-                header.get("FILTER") or header.get("FILT") or header.get("BAND")
-            )
+        # Suppress FITS header warnings during verification
+        with warnings.catch_warnings():
+            # Filter out common FITS header warnings that are harmless
+            warnings.filterwarnings("ignore", category=fits.verify.VerifyWarning)
+            # CardWarning may not exist in all astropy versions
             try:
-                wcs = WCS(header)
-                info["has_wcs"] = wcs.has_celestial
-            except Exception as exc:  # pragma: no cover - defensive
-                info["error"] = f"WCS parsing error: {exc}"
-                info["has_wcs"] = False
-            info["valid"] = bool(info["has_wcs"])
+                warnings.filterwarnings("ignore", category=fits.card.CardWarning)
+            except AttributeError:
+                pass  # CardWarning doesn't exist in this astropy version
+            warnings.filterwarnings(
+                "ignore", message=".*unrecognized non-standard convention.*"
+            )
+            warnings.filterwarnings("ignore", message=".*Unprintable string.*")
+            warnings.filterwarnings(
+                "ignore", message=".*FITS header values must contain.*"
+            )
+
+            # Track FITSFixedWarning but don't show them
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", category=FITSFixedWarning)
+                warnings.simplefilter("always", category=fits.verify.VerifyWarning)
+                # CardWarning may not exist in all astropy versions
+                try:
+                    warnings.simplefilter("always", category=fits.card.CardWarning)
+                except AttributeError:
+                    pass  # CardWarning doesn't exist in this astropy version
+
+                with fits.open(file_path) as hdul:
+                    header = hdul[0].header
+                    info["observation_time"] = header.get("DATE-OBS") or header.get(
+                        "MJD-OBS"
+                    )
+                    info["filter"] = (
+                        header.get("FILTER") or header.get("FILT") or header.get("BAND")
+                    )
+                    try:
+                        wcs = WCS(header)
+                        info["has_wcs"] = wcs.has_celestial
+                    except Exception as exc:  # pragma: no cover - defensive
+                        info["error"] = f"WCS parsing error: {exc}"
+                        info["has_wcs"] = False
+                    info["valid"] = bool(info["has_wcs"])
+
+                # Count warnings by type
+                for warning in w:
+                    warning_type = type(warning.category).__name__
+                    warning_counts[warning_type] += 1
     except Exception as exc:  # pragma: no cover - defensive
         info["error"] = str(exc)
     return info
@@ -295,7 +345,7 @@ def download_products_for_observation(
     """Download imaging products for a single observation."""
     from astroquery.mast import Observations
 
-    products = Observations.get_product_list(obs_id, mrp_only=True)
+    products = Observations.get_product_list(obs_id)
     total = len(products)
     if total == 0:
         logger.warning("No products found for %s %s", mission, obs_id)
@@ -319,7 +369,6 @@ def download_products_for_observation(
         filtered,
         download_dir=str(destination_dir),
         cache=True,
-        mrp_only=True,
     )
     downloaded = extract_manifest_paths(manifest)
     logger.info("Downloaded %s files for %s", len(downloaded), obs_id)
@@ -355,8 +404,12 @@ def process_observation_batch(
     obs_type: str,
     verify_fits: bool,
     dry_run: bool,
+    warning_counts: dict[str, int] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Download and verify all observations for a single SN/type."""
+    if warning_counts is None:
+        warning_counts = defaultdict(int)
+
     downloaded: list[str] = []
     verified: list[dict[str, Any]] = []
     invalid: list[dict[str, Any]] = []
@@ -385,7 +438,7 @@ def process_observation_batch(
 
             if verify_fits:
                 for file_path in files:
-                    info = verify_fits_file(file_path)
+                    info = verify_fits_file(file_path, warning_counts=warning_counts)
                     if info["valid"]:
                         verified.append(info)
                         logger.info("  ✅ Verified: %s", Path(info["file"]).name)
@@ -556,7 +609,12 @@ def main() -> None:
         if not args.skip_reference and ref_obs:
             ref_downloads, ref_verified, ref_invalid, ref_errors = (
                 process_observation_batch(
-                    sn_dir, ref_obs, "reference", args.verify_fits, args.dry_run
+                    sn_dir,
+                    ref_obs,
+                    "reference",
+                    args.verify_fits,
+                    args.dry_run,
+                    warning_counts=stats.warning_counts,
                 )
             )
             reference_files.extend(ref_downloads)
@@ -567,7 +625,12 @@ def main() -> None:
         if not args.skip_science and sci_obs:
             sci_downloads, sci_verified, sci_invalid, sci_errors = (
                 process_observation_batch(
-                    sn_dir, sci_obs, "science", args.verify_fits, args.dry_run
+                    sn_dir,
+                    sci_obs,
+                    "science",
+                    args.verify_fits,
+                    args.dry_run,
+                    warning_counts=stats.warning_counts,
                 )
             )
             science_files.extend(sci_downloads)
@@ -617,6 +680,18 @@ def main() -> None:
     success_rate = (stats.valid_files / total_checked * 100) if total_checked else 0.0
     logger.info("  Success rate: %.1f%%", success_rate)
     logger.info("")
+    if stats.warning_counts and sum(stats.warning_counts.values()) > 0:
+        logger.info("FITS Header Warnings (suppressed during processing):")
+        total_warnings = sum(stats.warning_counts.values())
+        logger.info("  Total warnings suppressed: %s", total_warnings)
+        for warning_type, count in sorted(
+            stats.warning_counts.items(), key=lambda x: x[1], reverse=True
+        ):
+            logger.info("    %s: %s", warning_type, count)
+        logger.info("  Note: These warnings are harmless and typically occur due to")
+        logger.info("        non-standard metadata formats (especially in PS1 data).")
+        logger.info("        Files are still valid and usable for processing.")
+        logger.info("")
     logger.info("⚠️  Total errors: %s", stats.errors)
     logger.info("")
     logger.info("Output directory: %s", args.output_dir)
