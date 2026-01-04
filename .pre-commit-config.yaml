@@ -43,7 +43,7 @@ repos:
         args: [--maxkb=1000]  # 1MB limit
         exclude: |
           (?x)^(
-            notebooks/archive/.*
+            notebooks/.*
           )$
 
       # Python specific
