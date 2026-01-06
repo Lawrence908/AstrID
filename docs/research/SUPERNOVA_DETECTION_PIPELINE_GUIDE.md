@@ -608,8 +608,3 @@ This proves the system can discover things it wasn't explicitly taught.
 | **Edge TPU** | Google's tensor processing unit for edge inference |
 | **MAST** | Mikulski Archive for Space Telescopes |
 | **SWIFT** | NASA UV/X-ray telescope with UVOT imager |
-
----
-
-*Document generated for the AstrID project. Based on deep learning pipelines for transient detection as used by ZTF, LSST, and other modern astronomical surveys.*
-
