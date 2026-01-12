@@ -100,7 +100,10 @@ AUXILIARY_DESCRIPTION_KEYWORDS = [
 ]
 
 MAX_FILE_SIZE_MB = 500
-DEFAULT_MAX_OBS = 3
+DEFAULT_MAX_OBS = (
+    5  # Observations per type (reference/science). 5 ref + 5 sci = 10 total per SN
+)
+MAX_PRODUCTS_PER_OBS = 3  # Limit products per observation to reduce download size (prioritizes larger files)
 
 
 @dataclass
@@ -230,7 +233,11 @@ def log_prefilter_report(stats: PrefilterStats, mode_label: str) -> None:
     logger.info("=" * 60)
 
 
-def filter_products(table: Any, include_auxiliary: bool = False) -> Any:
+def filter_products(
+    table: Any,
+    include_auxiliary: bool = False,
+    max_products_per_obs: int = MAX_PRODUCTS_PER_OBS,
+) -> Any:
     """Return only imaging products under size threshold.
 
     Args:
@@ -337,6 +344,30 @@ def filter_products(table: Any, include_auxiliary: bool = False) -> Any:
         # Combine all unbanded products with the single best product per band
         selected_indices = set(unbanded_indices)
         selected_indices.update(best_idx for best_idx, _ in band_best.values())
+
+        # For unbanded products (GALEX, SWIFT, etc.), limit to top N by file size
+        # This prevents downloading 20+ products per observation
+        if len(unbanded_indices) > max_products_per_obs:
+            # Sort unbanded products by size (largest first) and keep top N
+            unbanded_with_sizes = []
+            for idx in unbanded_indices:
+                row = table[idx]
+                file_size = (
+                    row.get("size") or row.get("filesize") or row.get("fileSize")
+                )
+                size_bytes = float(file_size) if file_size not in (None, "") else 0.0
+                unbanded_with_sizes.append((idx, size_bytes))
+
+            # Sort by size descending and take top N
+            unbanded_with_sizes.sort(key=lambda x: x[1], reverse=True)
+            top_unbanded = [
+                idx for idx, _ in unbanded_with_sizes[:max_products_per_obs]
+            ]
+
+            # Replace unbanded indices with top N
+            selected_indices = set(top_unbanded)
+            selected_indices.update(best_idx for best_idx, _ in band_best.values())
+
         indices = sorted(selected_indices)
 
     if excluded_auxiliary > 0:
@@ -449,6 +480,7 @@ def download_products_for_observation(
     mission: str,
     destination_dir: Path,
     include_auxiliary: bool = False,
+    max_products_per_obs: int = MAX_PRODUCTS_PER_OBS,
 ) -> list[Path]:
     """Download imaging products for a single observation.
 
@@ -469,7 +501,11 @@ def download_products_for_observation(
         logger.warning("No products found for %s %s", mission, obs_id)
         return []
 
-    filtered = filter_products(products, include_auxiliary=include_auxiliary)
+    filtered = filter_products(
+        products,
+        include_auxiliary=include_auxiliary,
+        max_products_per_obs=max_products_per_obs,
+    )
     logger.info(
         "Found %s imaging products for %s (filtered from %s total)",
         len(filtered),
@@ -524,6 +560,7 @@ def process_observation_batch(
     dry_run: bool,
     include_auxiliary: bool = False,
     warning_counts: dict[str, int] | None = None,
+    max_products_per_obs: int = MAX_PRODUCTS_PER_OBS,
 ) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Download and verify all observations for a single SN/type.
 
@@ -566,7 +603,11 @@ def process_observation_batch(
 
         try:
             files = download_products_for_observation(
-                obs_id, mission, target_dir, include_auxiliary=include_auxiliary
+                obs_id,
+                mission,
+                target_dir,
+                include_auxiliary=include_auxiliary,
+                max_products_per_obs=max_products_per_obs,
             )
             downloaded.extend(str(f) for f in files)
 
@@ -691,6 +732,13 @@ def main() -> None:
         help="Include auxiliary files (masks, weights, etc.) in downloads. "
         "Default: exclude to reduce download size by 60-80%%",
     )
+    parser.add_argument(
+        "--max-products-per-obs",
+        type=int,
+        default=MAX_PRODUCTS_PER_OBS,
+        help=f"Maximum products per observation (default: {MAX_PRODUCTS_PER_OBS}). "
+        "Lower values = fewer files per SN = more unique SNe possible",
+    )
 
     args = parser.parse_args()
 
@@ -771,6 +819,7 @@ def main() -> None:
                     args.dry_run,
                     include_auxiliary=args.include_auxiliary,
                     warning_counts=stats.warning_counts,
+                    max_products_per_obs=args.max_products_per_obs,
                 )
             )
             reference_files.extend(ref_downloads)
@@ -788,6 +837,7 @@ def main() -> None:
                     args.dry_run,
                     include_auxiliary=args.include_auxiliary,
                     warning_counts=stats.warning_counts,
+                    max_products_per_obs=args.max_products_per_obs,
                 )
             )
             science_files.extend(sci_downloads)
