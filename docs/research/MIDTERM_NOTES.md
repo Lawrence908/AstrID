@@ -238,3 +238,4 @@ class SNDifferencingPipeline:
 
 *Notes compiled from `notebooks/supernova_training_pipeline.ipynb` — January 2026*
 
+
