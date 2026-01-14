@@ -273,9 +273,17 @@ def run_organize(
             ref_dir = sn_dir / "reference"
             sci_dir = sn_dir / "science"
             if ref_dir.exists() and sci_dir.exists():
-                # Check they have files
-                ref_files = list(ref_dir.rglob("*.fits")) + list(ref_dir.rglob("*.img"))
-                sci_files = list(sci_dir.rglob("*.fits")) + list(sci_dir.rglob("*.img"))
+                # Check they have files (include .fits.gz compressed files)
+                ref_files = (
+                    list(ref_dir.rglob("*.fits"))
+                    + list(ref_dir.rglob("*.fits.gz"))
+                    + list(ref_dir.rglob("*.img"))
+                )
+                sci_files = (
+                    list(sci_dir.rglob("*.fits"))
+                    + list(sci_dir.rglob("*.fits.gz"))
+                    + list(sci_dir.rglob("*.img"))
+                )
                 if ref_files and sci_files:
                     complete_pairs.append(sn_dir.name)
 

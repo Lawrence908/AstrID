@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import warnings
@@ -52,6 +53,7 @@ class DifferencingResult:
     """Container for differencing pipeline results."""
 
     sn_name: str
+    mission_name: str
     filter_name: str
     ref_date: str
     sci_date: str
@@ -109,10 +111,11 @@ class SNDifferencingPipeline:
 
     def load_fits(self, filepath: Path) -> tuple[np.ndarray, dict, WCS]:
         """Load FITS image, header, and WCS."""
-        with fits.open(filepath) as hdul:
+        with fits.open(filepath, memmap=True) as hdul:
             for hdu in hdul:
                 if hdu.data is not None and len(hdu.data.shape) >= 2:
-                    data = hdu.data.astype(float)
+                    # Use float32 instead of float64 to save memory
+                    data = hdu.data.astype(np.float32)
                     header = dict(hdu.header)
                     if len(data.shape) == 3:
                         data = data[0]
@@ -137,11 +140,12 @@ class SNDifferencingPipeline:
                 exclude_percentile=10,
             )
             bkg_subtracted = image - bkg.background
-            bkg_rms = bkg.background_rms
+            bkg_rms = bkg.background_rms.copy()  # Copy to avoid keeping reference
+            del bkg  # Clean up background object
         except Exception:
             mean, median, std = sigma_clipped_stats(image_clean, sigma=3.0)
             bkg_subtracted = image - median
-            bkg_rms = np.full_like(image, std)
+            bkg_rms = np.full_like(image, std, dtype=np.float32)
 
         return bkg_subtracted, bkg_rms
 
@@ -172,7 +176,9 @@ class SNDifferencingPipeline:
         sigma_kernel = np.sqrt(sigma_target**2 - sigma_current**2)
 
         kernel = Gaussian2DKernel(sigma_kernel)
-        return convolve_fft(image, kernel, allow_huge=True, nan_treatment="fill")
+        # Use preserve_nan instead of nan_treatment to reduce memory usage
+        result = convolve_fft(image, kernel, allow_huge=True, preserve_nan=True)
+        return result
 
     def normalize_flux(
         self, science: np.ndarray, reference: np.ndarray, footprint: np.ndarray
@@ -216,6 +222,7 @@ class SNDifferencingPipeline:
         sci_path: Path,
         sn_name: str = "unknown",
         sn_coords: SkyCoord | None = None,
+        mission_name: str | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, DifferencingResult]:
         """
         Run full differencing pipeline.
@@ -223,14 +230,18 @@ class SNDifferencingPipeline:
         Returns:
             (difference_image, significance_map, sn_mask, result_metadata)
         """
-        # Extract filter
+        # Extract filter and mission from path
         filter_name = "unknown"
-        for filt in ["uvw2", "uvm2", "uvw1", "uuu", "ubb", "uvv"]:
-            if filt in str(sci_path).lower():
-                filter_name = filt
-                break
+        mission_name = detect_mission_from_filename(str(sci_path))
+        
+        if mission_name and mission_name in MISSION_FILTERS:
+            config = MISSION_FILTERS[mission_name]
+            for filt in config["filters"]:
+                if filt in str(sci_path).lower():
+                    filter_name = filt
+                    break
 
-        logger.info(f"Processing {sn_name} ({filter_name} filter)")
+        logger.info(f"Processing {sn_name} ({mission_name or 'UNKNOWN'} {filter_name} filter)")
 
         # Load images
         ref_data, ref_header, ref_wcs = self.load_fits(ref_path)
@@ -299,6 +310,7 @@ class SNDifferencingPipeline:
         # Metrics
         result = DifferencingResult(
             sn_name=sn_name,
+            mission_name=mission_name or detect_mission_from_filename(str(sci_path)) or "UNKNOWN",
             filter_name=filter_name,
             ref_date=ref_date,
             sci_date=sci_date,
@@ -319,50 +331,125 @@ class SNDifferencingPipeline:
             f"  Complete: overlap={overlap_frac:.1f}%, max_sig={result.sig_max:.1f}σ"
         )
 
+        # Clean up large intermediate arrays
+        del ref_data, sci_data, sci_aligned, footprint
+        del ref_bkg_sub, sci_bkg_sub, ref_noise, sci_noise
+        del ref_matched, sci_matched, sci_normalized
+        gc.collect()
+
         return diff, significance, sn_mask, result
+
+
+# Mission filter definitions
+MISSION_FILTERS = {
+    "SWIFT": {
+        "filters": ["uvw2", "uvm2", "uvw1", "uuu", "ubb", "uvv"],
+        "preferred": ["uuu", "uvw1", "uvm2", "uvw2", "ubb", "uvv"],
+        "pattern": "SWIFT_*.fits",
+    },
+    "GALEX": {
+        "filters": ["nuv", "fuv", "nd", "fd", "ng", "fg"],
+        "preferred": ["nuv", "fuv", "nd", "fd", "ng", "fg"],
+        "pattern": "GALEX_*.fits*",  # May be .fits or .fits.gz
+    },
+    "PS1": {
+        "filters": ["g", "r", "i", "z", "y"],
+        "preferred": ["g", "r", "i", "z", "y"],
+        "pattern": "PS1_*.fits*",
+    },
+}
+
+
+def detect_mission_from_filename(filename: str) -> str | None:
+    """Detect mission from filename."""
+    name = Path(filename).name.upper()
+    if name.startswith("SWIFT_"):
+        return "SWIFT"
+    elif name.startswith("GALEX_"):
+        return "GALEX"
+    elif name.startswith("PS1_"):
+        return "PS1"
+    return None
 
 
 def find_matching_filter_pair(
     sn_name: str, base_dir: Path
-) -> tuple[Path, Path, str] | None:
-    """Find a reference/science pair with matching SWIFT filter."""
+) -> tuple[Path, Path, str, str] | None:
+    """Find a reference/science pair with matching mission and filter.
+    
+    Returns:
+        (ref_path, sci_path, filter_name, mission) or None
+    """
     ref_dir = base_dir / sn_name / "reference"
     sci_dir = base_dir / sn_name / "science"
 
     if not ref_dir.exists() or not sci_dir.exists():
         return None
 
-    ref_by_filter = defaultdict(list)
-    sci_by_filter = defaultdict(list)
+    # Group files by mission
+    ref_by_mission: dict[str, dict[str, list[Path]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    sci_by_mission: dict[str, dict[str, list[Path]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
 
-    for f in ref_dir.glob("SWIFT_*.fits"):
-        for filt in ["uvw2", "uvm2", "uvw1", "uuu", "ubb", "uvv"]:
+    # Process reference files
+    for f in ref_dir.glob("*.fits*"):
+        mission = detect_mission_from_filename(f.name)
+        if mission is None:
+            continue
+        config = MISSION_FILTERS.get(mission)
+        if config is None:
+            continue
+
+        for filt in config["filters"]:
             if filt in f.name.lower():
-                ref_by_filter[filt].append(f)
+                ref_by_mission[mission][filt].append(f)
                 break
 
-    for f in sci_dir.glob("SWIFT_*.fits"):
-        for filt in ["uvw2", "uvm2", "uvw1", "uuu", "ubb", "uvv"]:
+    # Process science files
+    for f in sci_dir.glob("*.fits*"):
+        mission = detect_mission_from_filename(f.name)
+        if mission is None:
+            continue
+        config = MISSION_FILTERS.get(mission)
+        if config is None:
+            continue
+
+        for filt in config["filters"]:
             if filt in f.name.lower():
-                sci_by_filter[filt].append(f)
+                sci_by_mission[mission][filt].append(f)
                 break
 
-    common = set(ref_by_filter.keys()) & set(sci_by_filter.keys())
+    # Find same-mission pairs with matching filters
+    for mission in ref_by_mission.keys() & sci_by_mission.keys():
+        ref_filters = set(ref_by_mission[mission].keys())
+        sci_filters = set(sci_by_mission[mission].keys())
+        common_filters = ref_filters & sci_filters
 
-    if not common:
-        return None
+        if not common_filters:
+            continue
 
-    # Prefer uuu or uvw1
-    for preferred in ["uuu", "uvw1", "uvm2", "uvw2", "ubb", "uvv"]:
-        if preferred in common:
-            return ref_by_filter[preferred][0], sci_by_filter[preferred][0], preferred
+        config = MISSION_FILTERS[mission]
+        # Use preferred filter order
+        for preferred in config["preferred"]:
+            if preferred in common_filters:
+                ref_path = ref_by_mission[mission][preferred][0]
+                sci_path = sci_by_mission[mission][preferred][0]
+                return ref_path, sci_path, preferred, mission
 
-    filt = list(common)[0]
-    return ref_by_filter[filt][0], sci_by_filter[filt][0], filt
+        # Fallback to first common filter
+        filt = list(common_filters)[0]
+        ref_path = ref_by_mission[mission][filt][0]
+        sci_path = sci_by_mission[mission][filt][0]
+        return ref_path, sci_path, filt, mission
+
+    return None
 
 
 def get_same_mission_sne(manifest_path: Path) -> list[str]:
-    """Get list of SNe with same-mission (SWIFT-SWIFT) pairs."""
+    """Get list of SNe with same-mission pairs (SWIFT-SWIFT, GALEX-GALEX, PS1-PS1, etc.)."""
     with open(manifest_path) as f:
         manifest = json.load(f)
 
@@ -372,14 +459,18 @@ def get_same_mission_sne(manifest_path: Path) -> list[str]:
         sci_missions = set()
 
         for f in entry.get("reference_files", []):
-            if "SWIFT" in f:
-                ref_missions.add("SWIFT")
+            mission = detect_mission_from_filename(f)
+            if mission:
+                ref_missions.add(mission)
 
         for f in entry.get("science_files", []):
-            if "SWIFT" in f:
-                sci_missions.add("SWIFT")
+            mission = detect_mission_from_filename(f)
+            if mission:
+                sci_missions.add(mission)
 
-        if "SWIFT" in ref_missions and "SWIFT" in sci_missions:
+        # Check for any overlapping missions
+        common_missions = ref_missions & sci_missions
+        if common_missions:
             same_mission.append(entry["sn_name"])
 
     return same_mission
@@ -422,6 +513,19 @@ def main():
     parser.add_argument(
         "--mask-radius", type=int, default=10, help="Radius of SN mask in pixels"
     )
+    parser.add_argument(
+        "--mission",
+        type=str,
+        default=None,
+        choices=["SWIFT", "GALEX", "PS1"],
+        help="Filter to specific mission (default: all missions)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Number of SNe to process before forcing garbage collection (default: 10)",
+    )
 
     args = parser.parse_args()
 
@@ -437,6 +541,16 @@ def main():
         sne_to_process = args.sn
     else:
         sne_to_process = get_same_mission_sne(manifest_path)
+        
+        # Filter by mission if specified
+        if args.mission:
+            filtered = []
+            for sn_name in sne_to_process:
+                pair = find_matching_filter_pair(sn_name, input_dir)
+                if pair and pair[3] == args.mission:  # pair[3] is mission_name
+                    filtered.append(sn_name)
+            sne_to_process = filtered
+            logger.info(f"Filtered to {args.mission} mission: {len(sne_to_process)} SNe")
 
     logger.info(f"Processing {len(sne_to_process)} SNe: {sne_to_process}")
 
@@ -448,7 +562,7 @@ def main():
     # Process each SN
     results = []
 
-    for sn_name in sne_to_process:
+    for idx, sn_name in enumerate(sne_to_process, 1):
         logger.info(f"\n{'='*60}")
         logger.info(f"Processing {sn_name}")
 
@@ -457,7 +571,7 @@ def main():
             logger.warning("  No matching filter pair found, skipping")
             continue
 
-        ref_path, sci_path, filter_name = pair
+        ref_path, sci_path, filter_name, mission_name = pair
 
         try:
             diff, sig, mask, result = pipeline.process(
@@ -465,6 +579,7 @@ def main():
                 sci_path=sci_path,
                 sn_name=sn_name,
                 sn_coords=SN_COORDINATES.get(sn_name),
+                mission_name=mission_name,
             )
 
             # Create output directory for this SN
@@ -472,9 +587,10 @@ def main():
             sn_output_dir.mkdir(exist_ok=True)
 
             # Save difference image
-            diff_file = sn_output_dir / f"{sn_name}_{filter_name}_diff.fits"
+            diff_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_diff.fits"
             hdu_diff = fits.PrimaryHDU(diff.astype(np.float32))
             hdu_diff.header["SN_NAME"] = sn_name
+            hdu_diff.header["MISSION"] = mission_name
             hdu_diff.header["FILTER"] = filter_name
             hdu_diff.header["REF_DATE"] = result.ref_date
             hdu_diff.header["SCI_DATE"] = result.sci_date
@@ -486,13 +602,19 @@ def main():
             hdu_diff.writeto(diff_file, overwrite=True)
 
             # Save significance map
-            sig_file = sn_output_dir / f"{sn_name}_{filter_name}_sig.fits"
+            sig_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_sig.fits"
             hdu_sig = fits.PrimaryHDU(sig.astype(np.float32))
+            hdu_sig.header["SN_NAME"] = sn_name
+            hdu_sig.header["MISSION"] = mission_name
+            hdu_sig.header["FILTER"] = filter_name
             hdu_sig.writeto(sig_file, overwrite=True)
 
             # Save mask
-            mask_file = sn_output_dir / f"{sn_name}_{filter_name}_mask.fits"
+            mask_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_mask.fits"
             hdu_mask = fits.PrimaryHDU(mask.astype(np.float32))
+            hdu_mask.header["SN_NAME"] = sn_name
+            hdu_mask.header["MISSION"] = mission_name
+            hdu_mask.header["FILTER"] = filter_name
             hdu_mask.writeto(mask_file, overwrite=True)
 
             # Update result with file paths
@@ -507,6 +629,8 @@ def main():
             # Visualization
             if args.visualize:
                 try:
+                    import matplotlib
+                    matplotlib.use('Agg')  # Use non-interactive backend
                     import matplotlib.pyplot as plt
 
                     fig, axes = plt.subplots(1, 4, figsize=(16, 4))
@@ -558,18 +682,31 @@ def main():
 
                     plt.tight_layout()
                     plt.savefig(
-                        sn_output_dir / f"{sn_name}_{filter_name}_viz.png", dpi=150
+                        sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_viz.png", dpi=150
                     )
-                    plt.close()
+                    plt.close(fig)
+                    plt.clf()
+                    del fig, axes
 
                 except Exception as e:
                     logger.warning(f"  Visualization failed: {e}")
+
+            # Clean up memory after each SN
+            del diff, sig, mask, result
+            gc.collect()
 
         except Exception as e:
             logger.error(f"  Processing failed: {e}")
             import traceback
 
             traceback.print_exc()
+            # Clean up on error too
+            gc.collect()
+
+        # Force garbage collection after each batch
+        if idx % args.batch_size == 0:
+            logger.info(f"  [Batch {idx}/{len(sne_to_process)}] Running garbage collection...")
+            gc.collect()
 
     # Save results summary
     summary = {
@@ -593,11 +730,23 @@ def main():
 
     # Print training data summary
     logger.info("\n📊 Training Data Summary:")
+    by_mission = defaultdict(list)
     for r in results:
-        logger.info(
-            f"  {r['sn_name']}: {r['filter_name']}, sig_max={r['sig_max']:.1f}σ, "
-            f"mask={'yes' if r['sn_pixel'] else 'no'}"
-        )
+        # Extract mission from difference_file path
+        mission = "UNKNOWN"
+        for m in ["SWIFT", "GALEX", "PS1"]:
+            if m in r.get("difference_file", ""):
+                mission = m
+                break
+        by_mission[mission].append(r)
+        
+    for mission, mission_results in sorted(by_mission.items()):
+        logger.info(f"\n  {mission} ({len(mission_results)} pairs):")
+        for r in mission_results:
+            logger.info(
+                f"    {r['sn_name']}: {r['filter_name']}, sig_max={r['sig_max']:.1f}σ, "
+                f"overlap={r['overlap_fraction']:.1f}%, mask={'yes' if r['sn_pixel'] else 'no'}"
+            )
 
 
 if __name__ == "__main__":
