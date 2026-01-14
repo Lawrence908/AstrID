@@ -229,6 +229,8 @@ class SNDifferencingPipeline:
 | SNe downloaded (pilot) | 19 |
 | Same-mission pairs (usable) | 8 (42%) |
 | Cross-mission pairs (unusable) | 11 (58%) |
+| **Production dataset pairs** | **222** |
+| **Production FITS files** | **2,282** |
 | Best detection significance | 2120σ (SN 2014J) |
 | Typical overlap achieved | 93-100% |
 | Candidate detections per image | 73-629 |
@@ -236,6 +238,71 @@ class SNDifferencingPipeline:
 
 ---
 
-*Notes compiled from `notebooks/supernova_training_pipeline.ipynb` — January 2026*
+## Production Pipeline System
+
+### Modular Pipeline Architecture
+
+Following the pilot study, a production-ready pipeline system was developed with YAML-based configuration for reproducible dataset generation.
+
+**Key Components**:
+- **Configuration System** (`src/pipeline/config.py`): Dataclasses with validation for all pipeline parameters
+- **Unified Runner** (`scripts/run_pipeline_from_config.py`): Orchestrates all 5 stages from YAML config
+- **Mission-Specific Configs**: Pre-configured YAML files for SWIFT, PS1, GALEX, and multi-mission datasets
+
+**Pipeline Stages**:
+1. **Query** (`query_sn_fits_chunked.py`): Chunked MAST queries with checkpointing
+2. **Filter** (`identify_same_mission_pairs.py`): Same-mission pair identification
+3. **Download** (`download_sn_fits.py`): Smart filtering with 60-80% size reduction
+4. **Organize** (`organize_training_pairs.py`): Training-ready directory structure
+5. **Differencing** (`generate_difference_images.py`): Full astronomical differencing pipeline
+
+### Production Dataset Results
+
+**Current Production Dataset** (222 SNe):
+- **FITS files**: 2,282 (1,170 reference + 1,112 science)
+- **Files decompressed**: 1,542 (.fits.gz → .fits)
+- **Difference images**: In progress (SWIFT: 17 pairs completed, GALEX: 105 pairs processing)
+- **Mission breakdown**: SWIFT (17+ pairs), GALEX (105 pairs), PS1 (additional pairs)
+- **Quality**: 93.6% average overlap, all >85%
+
+### Reproducibility & Scalability
+
+**YAML Configuration Example**:
+```yaml
+dataset_name: "swift_uv_supernovae"
+query:
+  missions: ["SWIFT"]
+  filters: ["uuu", "uvw1", "uvm2", "uvw2"]
+  min_year: 2005
+  days_before: 1095
+  days_after: 730
+download:
+  max_obs_per_type: 5
+  include_auxiliary: false
+  require_same_mission: true
+```
+
+**Usage**:
+```bash
+python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml
+```
+
+**Benefits**:
+- Version-controlled configurations
+- Reproducible datasets
+- Easy mission-specific dataset generation
+- Checkpoint/resume support
+- Dry-run mode for testing
+
+### Documentation
+
+Comprehensive technical documentation created:
+- **[DATA_PIPELINE.md](DATA_PIPELINE.md)**: Full technical details of all 5 stages
+- **[configs/README.md](../../configs/README.md)**: Configuration guide and examples
+- **[dataset_generation_example.ipynb](../../notebooks/dataset_generation_example.ipynb)**: Interactive tutorial
+
+---
+
+*Notes compiled from `notebooks/supernova_training_pipeline.ipynb` and production pipeline development — January 2026*
 
 
