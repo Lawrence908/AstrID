@@ -1,0 +1,46 @@
+# Pan-STARRS1 (PS1) Optical Supernova Dataset Configuration
+#
+# This configuration generates a training dataset focused on PS1 optical
+# observations. PS1 provides excellent sky coverage and multi-band optical
+# photometry with consistent image quality.
+
+dataset_name: "ps1_optical_supernovae"
+description: "Pan-STARRS1 optical supernova training set with g, r, i, z, y bands"
+
+# Query parameters for MAST archive
+query:
+  missions: ["PS1"]
+  filters: ["g", "r", "i", "z", "y"]  # All PS1 optical filters
+  min_year: 2010  # PS1 survey start
+  max_year: 2020
+  days_before: 1095  # ~3 years for reference images
+  days_after: 730    # ~2 years for science images
+  radius_deg: 0.1    # Search radius in degrees
+  chunk_size: 250    # SNe per batch
+  start_index: 0
+  limit: null        # Process all matching SNe
+
+# Download parameters  
+download:
+  max_obs_per_type: 5        # Max 5 reference + 5 science observations per SN
+  max_products_per_obs: 3    # Max 3 FITS files per observation
+  include_auxiliary: false   # Exclude masks, weights
+  require_same_mission: true # Only download SNe with PS1-PS1 pairs
+  verify_fits: true          # Validate WCS after download
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.90  # PS1 typically has excellent overlap
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/ps1_optical/queries.json"
+  fits_downloads: "output/datasets/ps1_optical/fits_downloads"
+  fits_training: "output/datasets/ps1_optical/fits_training"
+  difference_images: "output/datasets/ps1_optical/difference_images"
+  checkpoint: "output/datasets/ps1_optical/checkpoint.json"
+  chunk_dir: "output/datasets/ps1_optical/chunks"

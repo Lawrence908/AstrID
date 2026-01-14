@@ -1,0 +1,46 @@
+# SWIFT UVOT UV-band Supernova Dataset Configuration
+# 
+# This configuration generates a training dataset focused on SWIFT UVOT
+# UV observations. SWIFT provides excellent temporal coverage and UV
+# sensitivity for supernova detection.
+
+dataset_name: "swift_uv_supernovae"
+description: "SWIFT UVOT UV-band supernova training set with matched filter pairs"
+
+# Query parameters for MAST archive
+query:
+  missions: ["SWIFT"]
+  filters: ["uuu", "uvw1", "uvm2", "uvw2"]  # UV filters only (exclude optical ubb, uvv)
+  min_year: 2005  # SWIFT launch year
+  max_year: 2020
+  days_before: 1095  # ~3 years for reference images (pre-SN)
+  days_after: 730    # ~2 years for science images (post-SN)
+  radius_deg: 0.1    # Search radius in degrees
+  chunk_size: 250    # SNe per batch
+  start_index: 0     # Start from beginning of catalog
+  limit: null        # Process all matching SNe (set to number for testing)
+
+# Download parameters  
+download:
+  max_obs_per_type: 5        # Max 5 reference + 5 science observations per SN
+  max_products_per_obs: 3    # Max 3 FITS files per observation
+  include_auxiliary: false   # Exclude masks, weights (60-80% size reduction)
+  require_same_mission: true # Only download SNe with SWIFT-SWIFT pairs
+  verify_fits: true          # Validate WCS after download
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85  # Minimum WCS overlap for differencing
+  max_file_size_mb: 500       # Skip files larger than 500 MB
+  verify_wcs: true            # Check for valid celestial coordinates
+
+# Output paths (relative to project root)
+output:
+  query_results: "output/datasets/swift_uv/queries.json"
+  fits_downloads: "output/datasets/swift_uv/fits_downloads"
+  fits_training: "output/datasets/swift_uv/fits_training"
+  difference_images: "output/datasets/swift_uv/difference_images"
+  checkpoint: "output/datasets/swift_uv/checkpoint.json"
+  chunk_dir: "output/datasets/swift_uv/chunks"

@@ -1,0 +1,61 @@
+# Multi-Mission Supernova Dataset Configuration
+#
+# This configuration generates a comprehensive training dataset across
+# multiple missions. Each mission's data is organized into separate
+# subdirectories for mission-specific training or combined analysis.
+#
+# Note: This will query all missions but only download same-mission pairs
+# (e.g., SWIFT-SWIFT, PS1-PS1, GALEX-GALEX). Cross-mission pairs are
+# automatically filtered out.
+
+dataset_name: "multi_mission_supernovae"
+description: "Comprehensive supernova training set across SWIFT, PS1, and GALEX missions"
+
+# Query parameters for MAST archive
+query:
+  missions: ["SWIFT", "PS1", "GALEX"]  # Query all three missions
+  filters: null  # Don't filter by specific filters (get all available)
+  min_year: 2005  # Start from 2005 (SWIFT and GALEX launch)
+  max_year: 2020
+  days_before: 1095  # ~3 years for reference images
+  days_after: 730    # ~2 years for science images
+  radius_deg: 0.1    # Standard search radius
+  chunk_size: 250    # SNe per batch
+  start_index: 0
+  limit: null        # Process all matching SNe
+
+# Download parameters  
+download:
+  max_obs_per_type: 5        # Max 5 reference + 5 science observations per SN
+  max_products_per_obs: 3    # Max 3 FITS files per observation
+  include_auxiliary: false   # Exclude masks, weights
+  require_same_mission: true # CRITICAL: Only same-mission pairs
+  verify_fits: true          # Validate WCS after download
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85  # Standard minimum overlap
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/multi_mission/queries.json"
+  fits_downloads: "output/datasets/multi_mission/fits_downloads"
+  fits_training: "output/datasets/multi_mission/fits_training"
+  difference_images: "output/datasets/multi_mission/difference_images"
+  checkpoint: "output/datasets/multi_mission/checkpoint.json"
+  chunk_dir: "output/datasets/multi_mission/chunks"
+
+# Post-processing notes:
+# After pipeline completion, you can separate by mission:
+#   - SWIFT data: filter by mission_name == "SWIFT" in processing_summary.json
+#   - PS1 data: filter by mission_name == "PS1"
+#   - GALEX data: filter by mission_name == "GALEX"
+#
+# This allows:
+#   1. Mission-specific model training
+#   2. Transfer learning experiments
+#   3. Multi-mission ensemble models

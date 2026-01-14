@@ -1,0 +1,46 @@
+# GALEX UV Supernova Dataset Configuration
+#
+# This configuration generates a training dataset focused on GALEX UV
+# observations. GALEX provides far-UV and near-UV imaging with wide
+# field of view, useful for UV-bright transients.
+
+dataset_name: "galex_uv_supernovae"
+description: "GALEX UV supernova training set with FUV and NUV bands"
+
+# Query parameters for MAST archive
+query:
+  missions: ["GALEX"]
+  filters: ["fuv", "nuv"]  # Far-UV and Near-UV
+  min_year: 2005  # GALEX mission start
+  max_year: 2020
+  days_before: 1095  # ~3 years for reference images
+  days_after: 730    # ~2 years for science images
+  radius_deg: 0.2    # Larger radius for GALEX's wider PSF
+  chunk_size: 250    # SNe per batch
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 5        # Max 5 reference + 5 science observations per SN
+  max_products_per_obs: 3    # Max 3 FITS files per observation
+  include_auxiliary: false   # Exclude masks, weights
+  require_same_mission: true # Only download SNe with GALEX-GALEX pairs
+  verify_fits: true          # Validate WCS after download
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.80  # GALEX may have lower overlap due to wider FOV
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/galex_uv/queries.json"
+  fits_downloads: "output/datasets/galex_uv/fits_downloads"
+  fits_training: "output/datasets/galex_uv/fits_training"
+  difference_images: "output/datasets/galex_uv/difference_images"
+  checkpoint: "output/datasets/galex_uv/checkpoint.json"
+  chunk_dir: "output/datasets/galex_uv/chunks"
