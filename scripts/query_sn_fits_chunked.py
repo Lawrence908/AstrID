@@ -259,6 +259,12 @@ async def main():
         help="Minimum discovery year to process",
     )
     parser.add_argument(
+        "--max-year",
+        type=int,
+        default=None,
+        help="Maximum discovery year to process",
+    )
+    parser.add_argument(
         "--missions",
         nargs="+",
         default=["TESS", "GALEX", "PS1", "SWIFT"],
@@ -308,16 +314,24 @@ async def main():
     entries = parse_catalog_file(args.catalog)
 
     # Filter by year if specified
-    if args.min_year:
+    if args.min_year or args.max_year:
         filtered = []
         for entry in entries:
-            if (
-                entry["discovery_date"]
-                and entry["discovery_date"].year >= args.min_year
-            ):
-                filtered.append(entry)
+            if not entry["discovery_date"]:
+                continue
+            year = entry["discovery_date"].year
+            if args.min_year and year < args.min_year:
+                continue
+            if args.max_year and year > args.max_year:
+                continue
+            filtered.append(entry)
         entries = filtered
-        logger.info(f"Filtered to {len(entries)} entries with year >= {args.min_year}")
+        year_range = []
+        if args.min_year:
+            year_range.append(f">= {args.min_year}")
+        if args.max_year:
+            year_range.append(f"<= {args.max_year}")
+        logger.info(f"Filtered to {len(entries)} entries with year {' and '.join(year_range)}")
 
     # Skip entries if start-index specified
     if args.start_index > 0:
