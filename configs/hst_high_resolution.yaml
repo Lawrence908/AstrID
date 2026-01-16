@@ -1,0 +1,49 @@
+# HST High-Resolution Dataset Configuration
+#
+# HST (Hubble Space Telescope) provides the highest resolution space-based
+# optical/UV imaging. While coverage is limited to targeted observations,
+# famous nearby supernovae often have extensive HST follow-up.
+#
+# Best for: High-quality difference images of well-studied SNe.
+# Examples: SN 2014J (M82), SN 2011fe (M101), SN 1987A, etc.
+
+dataset_name: "hst_high_resolution"
+description: "HST high-resolution imaging for nearby supernovae"
+
+# Query parameters for MAST archive
+query:
+  missions: ["HST"]
+  filters: null  # Accept all HST filters (ACS, WFC3, WFPC2)
+  min_year: 2000  # Modern HST era (ACS installed 2002)
+  max_year: 2024
+  days_before: 3650  # 10 years - HST archive goes back to 1990
+  days_after: 1825   # 5 years - well-studied SNe get long-term follow-up
+  radius_deg: 0.05   # Smaller radius - HST has precise pointing
+  chunk_size: 50     # Smaller chunks - fewer HST-observed SNe
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 20       # HST programs often have many epochs
+  max_products_per_obs: 5    # Multiple filters per visit
+  include_auxiliary: false
+  require_same_mission: true  # HST-HST pairs for consistent resolution
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.90  # HST pointing is excellent
+  max_file_size_mb: 1000      # HST images can be large
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/hst_highres/queries.json"
+  fits_downloads: "output/datasets/hst_highres/fits_downloads"
+  fits_training: "output/datasets/hst_highres/fits_training"
+  difference_images: "output/datasets/hst_highres/difference_images"
+  checkpoint: "output/datasets/hst_highres/checkpoint.json"
+  chunk_dir: "output/datasets/hst_highres/chunks"

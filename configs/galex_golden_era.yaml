@@ -1,0 +1,48 @@
+# GALEX Golden Era Dataset Configuration
+#
+# BEST FOR GETTING PAIRS: GALEX was fully operational 2003-2012.
+# Targeting SNe from 2005-2011 ensures GALEX data exists for BOTH
+# reference (pre-SN) and science (post-SN) windows.
+#
+# This is your highest-yield config for UV difference imaging.
+
+dataset_name: "galex_golden_era"
+description: "GALEX golden era (2005-2011) - maximum UV pair availability"
+
+# Query parameters for MAST archive
+query:
+  missions: ["GALEX"]
+  filters: null  # Accept FUV and NUV
+  min_year: 2005  # GALEX fully operational
+  max_year: 2011  # Before GALEX shutdown (ended June 2013)
+  days_before: 1095  # ~3 years for reference images (back to 2002+)
+  days_after: 730    # ~2 years for science images (through 2013)
+  radius_deg: 0.2    # Larger radius for GALEX's 5" FWHM PSF
+  chunk_size: 100    # Smaller chunks for reliability
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10       # More observations - GALEX did repeat visits
+  max_products_per_obs: 3
+  include_auxiliary: false
+  require_same_mission: true  # GALEX-GALEX pairs only
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.75  # GALEX FOV is large, may have offset
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/galex_golden_era/queries.json"
+  fits_downloads: "output/datasets/galex_golden_era/fits_downloads"
+  fits_training: "output/datasets/galex_golden_era/fits_training"
+  difference_images: "output/datasets/galex_golden_era/difference_images"
+  checkpoint: "output/datasets/galex_golden_era/checkpoint.json"
+  chunk_dir: "output/datasets/galex_golden_era/chunks"

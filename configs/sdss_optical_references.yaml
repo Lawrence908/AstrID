@@ -1,0 +1,49 @@
+# SDSS Optical Reference Dataset Configuration
+#
+# SDSS (Sloan Digital Sky Survey) provides excellent ground-based optical
+# imaging covering ~35% of the sky. SDSS imaging was taken 2000-2009,
+# making it ideal for REFERENCE images for more recent supernovae.
+#
+# Strategy: Use SDSS for reference, pair with SWIFT/HST for science images.
+# Note: SDSS is available in MAST but coverage is limited to SDSS footprint.
+
+dataset_name: "sdss_optical_references"
+description: "SDSS optical references for 2010-2020 supernovae"
+
+# Query parameters for MAST archive
+query:
+  missions: ["SDSS", "SWIFT", "HST"]  # SDSS refs + space-based science
+  filters: null  # Accept all (ugriz for SDSS, UV for SWIFT)
+  min_year: 2010  # SNe after SDSS imaging campaign
+  max_year: 2020
+  days_before: 3650  # 10 years back to capture SDSS imaging (2000-2009)
+  days_after: 730    # 2 years for science images
+  radius_deg: 0.1
+  chunk_size: 100
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 5
+  max_products_per_obs: 5    # SDSS has ugriz bands
+  include_auxiliary: false
+  require_same_mission: false  # Allow cross-mission pairs (SDSS ref + SWIFT sci)
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/sdss_optical/queries.json"
+  fits_downloads: "output/datasets/sdss_optical/fits_downloads"
+  fits_training: "output/datasets/sdss_optical/fits_training"
+  difference_images: "output/datasets/sdss_optical/difference_images"
+  checkpoint: "output/datasets/sdss_optical/checkpoint.json"
+  chunk_dir: "output/datasets/sdss_optical/chunks"

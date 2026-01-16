@@ -1,0 +1,49 @@
+# SWIFT Continuous Coverage Dataset Configuration
+#
+# SWIFT has been operational since 2004 and continues today, making it
+# the ONLY UV mission with continuous coverage spanning 20+ years.
+# This makes SWIFT the most reliable source for UV difference imaging
+# of supernovae from any era.
+#
+# SWIFT UVOT provides 6 filters: UVW2, UVM2, UVW1, U, B, V
+
+dataset_name: "swift_continuous"
+description: "SWIFT continuous UV coverage 2005-2024"
+
+# Query parameters for MAST archive
+query:
+  missions: ["SWIFT"]
+  filters: null  # Accept all UVOT filters
+  min_year: 2005  # SWIFT fully operational
+  max_year: 2024
+  days_before: 1095  # 3 years reference window
+  days_after: 730    # 2 years science window
+  radius_deg: 0.1
+  chunk_size: 200
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 15       # SWIFT often has many epochs per target
+  max_products_per_obs: 6    # One per filter
+  include_auxiliary: false
+  require_same_mission: true  # SWIFT-SWIFT pairs
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/swift_continuous/queries.json"
+  fits_downloads: "output/datasets/swift_continuous/fits_downloads"
+  fits_training: "output/datasets/swift_continuous/fits_training"
+  difference_images: "output/datasets/swift_continuous/difference_images"
+  checkpoint: "output/datasets/swift_continuous/checkpoint.json"
+  chunk_dir: "output/datasets/swift_continuous/chunks"

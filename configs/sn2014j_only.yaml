@@ -1,0 +1,48 @@
+# SN 2014J Focused Dataset Configuration
+#
+# SN 2014J in M82 (NGC 3034) - the closest Type Ia supernova in ~40 years.
+# Discovered: 2014-01-21
+# Coordinates: 09h 55m 42.15s, +69° 40' 25.9"
+#
+# This config focuses on just 2014 to quickly acquire this important event.
+
+dataset_name: "sn_2014j_focus"
+description: "SN 2014J - closest Type Ia in 40 years (M82/NGC3034)"
+
+# Query parameters for MAST archive
+query:
+  missions: ["GALEX", "SWIFT", "PS1", "HST"]  # HST may have good data for nearby M82
+  filters: null  # Accept all filters
+  min_year: 2014  # Just 2014
+  max_year: 2014  # Just 2014
+  days_before: 1095  # ~3 years for reference images
+  days_after: 730    # ~2 years for science images
+  radius_deg: 0.15   # Slightly larger radius for this well-observed target
+  chunk_size: 50     # Smaller chunks since fewer targets
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10       # More observations for this important target
+  max_products_per_obs: 5    # More products per observation
+  include_auxiliary: false
+  require_same_mission: true
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/sn2014j/queries.json"
+  fits_downloads: "output/datasets/sn2014j/fits_downloads"
+  fits_training: "output/datasets/sn2014j/fits_training"
+  difference_images: "output/datasets/sn2014j/difference_images"
+  checkpoint: "output/datasets/sn2014j/checkpoint.json"
+  chunk_dir: "output/datasets/sn2014j/chunks"

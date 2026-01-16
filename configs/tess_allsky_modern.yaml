@@ -1,0 +1,51 @@
+# TESS All-Sky Modern Dataset Configuration
+#
+# TESS (Transiting Exoplanet Survey Satellite) launched 2018 and provides
+# near-continuous all-sky coverage. While primarily for exoplanets,
+# TESS has captured many transients including supernovae.
+#
+# Coverage: ~85% of the sky with 27-day continuous viewing per sector
+# Cadence: 30-min (full-frame), 2-min (selected targets)
+# 
+# Note: TESS has large pixels (21"/pixel) - best for bright, nearby SNe.
+
+dataset_name: "tess_allsky_modern"
+description: "TESS all-sky coverage for 2018+ supernovae"
+
+# Query parameters for MAST archive
+query:
+  missions: ["TESS"]
+  filters: null  # TESS has single broad red filter
+  min_year: 2018  # TESS launch
+  max_year: 2025
+  days_before: 365   # 1 year - TESS re-observes sectors
+  days_after: 365    # 1 year post-SN
+  radius_deg: 0.3    # Larger radius for TESS's large pixels
+  chunk_size: 100
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10
+  max_products_per_obs: 3
+  include_auxiliary: false
+  require_same_mission: true
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.70  # TESS FFIs have large overlap
+  max_file_size_mb: 2000      # TESS full-frame images are large
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/tess_allsky/queries.json"
+  fits_downloads: "output/datasets/tess_allsky/fits_downloads"
+  fits_training: "output/datasets/tess_allsky/fits_training"
+  difference_images: "output/datasets/tess_allsky/difference_images"
+  checkpoint: "output/datasets/tess_allsky/checkpoint.json"
+  chunk_dir: "output/datasets/tess_allsky/chunks"

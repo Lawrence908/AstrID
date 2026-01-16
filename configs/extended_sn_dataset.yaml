@@ -1,0 +1,45 @@
+# Extended Supernova Dataset Configuration
+#
+# This configuration adds 2011-2020 supernovae to the existing 2005-2010 dataset,
+# specifically to capture important events like SN 2014J (closest Type Ia in 40 years).
+
+dataset_name: "extended_sn_2011_2020"
+description: "Extended supernova dataset including 2011-2020 events (SN 2014J, etc.)"
+
+# Query parameters for MAST archive
+query:
+  missions: ["GALEX", "SWIFT", "PS1"]
+  filters: null  # Accept all filters
+  min_year: 2011  # Start where the previous dataset ended
+  max_year: 2020  # Include through 2020
+  days_before: 1095  # ~3 years for reference images
+  days_after: 730    # ~2 years for science images
+  radius_deg: 0.1
+  chunk_size: 250    # SNe per batch
+  start_index: 0
+  limit: null        # Process all matching SNe
+
+# Download parameters  
+download:
+  max_obs_per_type: 5        # Max 5 reference + 5 science observations per SN
+  max_products_per_obs: 3    # Max 3 FITS files per observation
+  include_auxiliary: false   # Exclude masks, weights
+  require_same_mission: true # Only download SNe with same-mission pairs
+  verify_fits: true          # Validate WCS after download
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths - separate from existing data to avoid conflicts
+output:
+  query_results: "output/datasets/extended_2011_2020/queries.json"
+  fits_downloads: "output/datasets/extended_2011_2020/fits_downloads"
+  fits_training: "output/datasets/extended_2011_2020/fits_training"
+  difference_images: "output/datasets/extended_2011_2020/difference_images"
+  checkpoint: "output/datasets/extended_2011_2020/checkpoint.json"
+  chunk_dir: "output/datasets/extended_2011_2020/chunks"

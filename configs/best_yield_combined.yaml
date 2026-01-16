@@ -1,0 +1,49 @@
+# Best Yield Combined Dataset Configuration
+#
+# This config maximizes the number of usable pairs by:
+# 1. Targeting the GALEX golden era (2005-2011) for UV pairs
+# 2. Adding SWIFT for continuous UV coverage
+# 3. Including HST for high-value targets
+#
+# This is the RECOMMENDED config for building a large training set.
+
+dataset_name: "best_yield_combined"
+description: "Maximum yield: GALEX era SNe with GALEX+SWIFT+HST coverage"
+
+# Query parameters for MAST archive
+query:
+  missions: ["GALEX", "SWIFT", "HST"]
+  filters: null
+  min_year: 2005  # GALEX + SWIFT both operational
+  max_year: 2011  # Before GALEX shutdown
+  days_before: 1095  # 3 years
+  days_after: 730    # 2 years (GALEX still operational through 2013)
+  radius_deg: 0.15
+  chunk_size: 150
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10
+  max_products_per_obs: 5
+  include_auxiliary: false
+  require_same_mission: true  # Same-mission pairs for consistent PSF
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.80
+  max_file_size_mb: 500
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/best_yield/queries.json"
+  fits_downloads: "output/datasets/best_yield/fits_downloads"
+  fits_training: "output/datasets/best_yield/fits_training"
+  difference_images: "output/datasets/best_yield/difference_images"
+  checkpoint: "output/datasets/best_yield/checkpoint.json"
+  chunk_dir: "output/datasets/best_yield/chunks"
