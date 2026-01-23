@@ -196,11 +196,11 @@ async def query_mast_for_supernova(
     radius_deg: float = 0.1,
     disable_time_filter: bool = False,
 ) -> dict[str, Any]:
-    """Query MAST for reference and science images for a supernova.
+    """Query archives (MAST and/or IRSA) for reference and science images for a supernova.
 
     Args:
         sn_entry: Parsed supernova entry from catalog
-        missions: List of missions to query (e.g., ['HST', 'JWST', 'TESS'])
+        missions: List of missions to query (e.g., ['HST', 'ZTF', 'GALEX'])
         days_before: Days before discovery to search for reference images
         days_after: Days after discovery to search for science images
         radius_deg: Search radius in degrees
@@ -208,14 +208,14 @@ async def query_mast_for_supernova(
     Returns:
         Dictionary with reference and science observations
     """
-    from src.adapters.external.mast import MASTClient
+    from src.adapters.external.archive_router import ArchiveRouter
 
     sn_name = sn_entry["sn_name"]
     ra_deg = sn_entry["ra_deg"]
     dec_deg = sn_entry["dec_deg"]
     discovery_date = sn_entry["discovery_date"]
 
-    logger.info(f"Querying MAST for {sn_name} at ({ra_deg:.4f}, {dec_deg:.4f})")
+    logger.info(f"Querying archives for {sn_name} at ({ra_deg:.4f}, {dec_deg:.4f})")
 
     result = {
         "sn_name": sn_name,
@@ -232,14 +232,14 @@ async def query_mast_for_supernova(
         logger.warning(f"{sn_name}: No discovery date, skipping time-based queries")
         return result
 
-    client = MASTClient()
+    router = ArchiveRouter()
 
     try:
         if disable_time_filter or discovery_date is None:
             logger.info(
                 f"{sn_name}: Time filtering disabled - querying all available observations"
             )
-            all_obs = await client.query_observations_by_position(
+            all_obs = await router.query_observations_by_position(
                 ra=ra_deg,
                 dec=dec_deg,
                 radius=radius_deg,
@@ -264,7 +264,7 @@ async def query_mast_for_supernova(
         logger.info(
             f"{sn_name}: Querying reference images ({ref_start.date()} to {ref_end.date()})"
         )
-        ref_obs = await client.query_observations_by_position(
+        ref_obs = await router.query_observations_by_position(
             ra=ra_deg,
             dec=dec_deg,
             radius=radius_deg,
@@ -279,7 +279,7 @@ async def query_mast_for_supernova(
         logger.info(
             f"{sn_name}: Querying science images ({sci_start.date()} to {sci_end.date()})"
         )
-        sci_obs = await client.query_observations_by_position(
+        sci_obs = await router.query_observations_by_position(
             ra=ra_deg,
             dec=dec_deg,
             radius=radius_deg,
@@ -291,7 +291,7 @@ async def query_mast_for_supernova(
         logger.info(f"{sn_name}: Found {len(sci_obs)} science observations")
 
     except Exception as e:
-        error_msg = f"Error querying MAST for {sn_name}: {e}"
+        error_msg = f"Error querying archives for {sn_name}: {e}"
         logger.error(error_msg)
         result["errors"].append(error_msg)
 

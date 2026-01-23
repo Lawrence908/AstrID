@@ -12,6 +12,7 @@ This script:
 
 import argparse
 import asyncio
+import gc
 import json
 import logging
 
@@ -182,6 +183,11 @@ async def process_chunk(
             logger.info(
                 f"{sn_name}: {ref_count} reference, {sci_count} science observations"
             )
+            
+            # Clean up memory after each query to prevent accumulation
+            if i % 10 == 0:  # Every 10 supernovae
+                gc.collect()
+                logger.debug(f"Ran garbage collection after {i} supernovae")
         except Exception as e:
             logger.error(f"Error processing {sn_name}: {e}")
             # Still save a result entry with error
