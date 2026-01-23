@@ -111,28 +111,106 @@ def download_osc_catalog(output_dir: Path) -> list[dict[str, Any]]:
 
     # Download if no cache or cache is old
     if data is None:
-        # Try direct JSON download from GitHub (most reliable)
+        # Try multiple sources in order of preference
+        sources_tried = []
+        
+        # Method 1: Try OSC API (Open Astronomy Catalog API)
         try:
-            logger.info("Downloading OSC catalog from GitHub...")
-            # OSC data is available via GitHub
+            logger.info("Trying OSC API...")
             with httpx.Client(timeout=300.0) as client:
                 response = client.get(
-                    "https://raw.githubusercontent.com/astrocatalogs/supernovae/master/output/json/supernovae.json"
+                    "https://api.astrocats.space/catalog/sne?format=JSON"
                 )
                 if response.status_code == 200:
-                    logger.info(
-                        "Downloading large file, this may take a few minutes..."
-                    )
-                    data = response.json()
-                    with open(cache_file, "w") as f:
-                        json.dump(data, f)
-                    logger.info(f"Downloaded {len(data)} supernovae from OSC")
+                    catalog_list = response.json()
+                    logger.info(f"API returned {len(catalog_list)} entries")
+                    
+                    # Check format
+                    if isinstance(catalog_list, dict):
+                        # Check if dict contains actual data or just names (empty "sne" lists)
+                        sample_key = next(iter(catalog_list.keys()), None)
+                        if sample_key and isinstance(catalog_list[sample_key], dict) and catalog_list[sample_key].get("sne") == []:
+                            # Names only - fetch recent SNe individually
+                            logger.info("Catalog contains names only - fetching recent SNe (2018-2025)...")
+                            sn_names = [name for name in catalog_list.keys() 
+                                       if any(name.startswith(str(year)) for year in range(2018, 2026))]
+                            logger.info(f"Found {len(sn_names)} supernovae from 2018-2025")
+                            
+                            data = {}
+                            for i, sn_name in enumerate(sn_names[:500], 1):  # Limit to 500 to avoid timeout
+                                if i % 50 == 0:
+                                    logger.info(f"Fetching {i}/{min(500, len(sn_names))}...")
+                                try:
+                                    sn_r = client.get(f"https://api.astrocats.space/{sn_name}", timeout=20.0)
+                                    if sn_r.status_code == 200:
+                                        sn_data = sn_r.json()
+                                        if isinstance(sn_data, dict) and sn_data:
+                                            data[sn_name] = sn_data
+                                except:
+                                    continue
+                            logger.info(f"Fetched {len(data)} supernovae")
+                        else:
+                            data = catalog_list
+                            logger.info(f"Got dict format with {len(data)} supernovae")
+                    elif isinstance(catalog_list, list):
+                        # Might be list of names or list of objects
+                        if catalog_list and isinstance(catalog_list[0], dict) and "name" in catalog_list[0]:
+                            # List of objects with data
+                            data = {entry.get("name", entry.get("id", f"SN{i}")): entry 
+                                   for i, entry in enumerate(catalog_list) if isinstance(entry, dict)}
+                            logger.info(f"Converted list to dict: {len(data)} supernovae")
+                        else:
+                            logger.warning("API returned list of names only - too slow to fetch individually")
+                            sources_tried.append("OSC API (names only)")
+                            data = None
+                    else:
+                        logger.warning(f"Unexpected API response format: {type(catalog_list)}")
+                        sources_tried.append("OSC API (unexpected format)")
+                        data = None
                 else:
-                    logger.error(f"Download failed with status {response.status_code}")
-                    return []
+                    sources_tried.append(f"OSC API (status {response.status_code})")
+                    data = None
         except Exception as e:
-            logger.error(f"Failed to download OSC catalog: {e}")
+            logger.debug(f"OSC API failed: {e}")
+            sources_tried.append(f"OSC API (error: {str(e)[:50]})")
+            data = None
+        
+        # Method 2: Try alternative GitHub URL (if API didn't work)
+        if data is None:
+            try:
+                logger.info("Trying alternative GitHub source...")
+                with httpx.Client(timeout=300.0) as client:
+                    # Try the astrocatalogs GitHub releases or raw files
+                    response = client.get(
+                        "https://api.github.com/repos/astrocatalogs/supernovae/contents/output/json/supernovae.json",
+                        headers={"Accept": "application/vnd.github.v3.raw"}
+                    )
+                    if response.status_code == 200:
+                        logger.info("Downloading large file from GitHub, this may take a few minutes...")
+                        data = response.json()
+                        logger.info(f"Downloaded {len(data)} supernovae from GitHub")
+                    else:
+                        sources_tried.append(f"GitHub (status {response.status_code})")
+            except Exception as e:
+                logger.debug(f"GitHub download failed: {e}")
+                sources_tried.append(f"GitHub (error: {str(e)[:50]})")
+        
+        # If all methods failed
+        if data is None:
+            logger.error(f"Failed to download OSC catalog from all sources: {', '.join(sources_tried)}")
+            logger.info("You may need to:")
+            logger.info("  1. Check your internet connection")
+            logger.info("  2. Visit https://sne.space manually to download the catalog")
+            logger.info("  3. Use --skip-osc to continue with existing catalog only")
             return []
+        
+        # Save cache
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(data, f)
+            logger.info(f"Cached {len(data)} supernovae to {cache_file}")
+        except Exception as e:
+            logger.warning(f"Failed to cache catalog: {e}")
 
     # Parse OSC data
     # OSC format: { "SN2011fe": { "ra": [{ "value": "14:03:05.81", ... }], ... }, ... }
