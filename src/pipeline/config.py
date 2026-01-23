@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class QueryConfig:
-    """Configuration for MAST archive queries."""
+    """Configuration for archive queries (MAST and/or IRSA)."""
 
     missions: list[str]
     filters: list[str] | None = None
+    archives: list[str] | None = None  # Optional: ["MAST", "IRSA"] or None for auto-routing
     min_year: int = 2005
     max_year: int | None = None
     days_before: int = 1095  # ~3 years for reference images
@@ -177,6 +178,7 @@ class PipelineConfig:
         query_config = QueryConfig(
             missions=query_data.get("missions", ["SWIFT", "PS1", "GALEX"]),
             filters=query_data.get("filters"),
+            archives=query_data.get("archives"),  # Optional: auto-routed if None
             min_year=query_data.get("min_year", 2005),
             max_year=query_data.get("max_year"),
             days_before=query_data.get("days_before", 1095),
@@ -256,6 +258,7 @@ class PipelineConfig:
             "query": {
                 "missions": self.query.missions,
                 "filters": self.query.filters,
+                "archives": self.query.archives,
                 "min_year": self.query.min_year,
                 "max_year": self.query.max_year,
                 "days_before": self.query.days_before,
@@ -316,12 +319,17 @@ class PipelineConfig:
                     )
 
         # Check mission names are valid
-        valid_missions = {"SWIFT", "PS1", "GALEX", "TESS", "HST", "JWST"}
-        invalid_missions = set(self.query.missions) - valid_missions
+        valid_missions = {
+            # MAST missions
+            "SWIFT", "PS1", "GALEX", "TESS", "HST", "JWST", "SDSS", "HLA", "HLSP",
+            # IRSA missions
+            "ZTF", "PTF", "WISE", "NEOWISE", "2MASS", "SPITZER",
+        }
+        invalid_missions = set(m.upper() for m in self.query.missions) - {m.upper() for m in valid_missions}
         if invalid_missions:
             warnings.append(
                 f"Unknown missions (may still work): {invalid_missions}. "
-                f"Known missions: {valid_missions}"
+                f"Known missions: {sorted(valid_missions)}"
             )
 
         return warnings

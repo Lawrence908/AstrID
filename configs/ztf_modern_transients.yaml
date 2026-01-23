@@ -1,0 +1,49 @@
+# ZTF Modern Transients Dataset Configuration
+#
+# ZTF (Zwicky Transient Facility) provides excellent optical transient coverage
+# starting in 2018. ZTF observes ~3750 square degrees per night with 30-second
+# exposures in g, r, and i bands.
+#
+# This config targets supernovae from 2018+ when ZTF became operational.
+# ZTF data is accessed via IRSA (not MAST).
+
+dataset_name: "ztf_modern_transients"
+description: "ZTF optical transients for 2018+ supernovae"
+
+# Query parameters for IRSA archive
+query:
+  missions: ["ZTF"]
+  filters: null  # Accept all ZTF filters (zg, zr, zi)
+  min_year: 2018  # ZTF operational start
+  max_year: 2025
+  days_before: 365  # 1 year for reference images
+  days_after: 365   # 1 year for science images
+  radius_deg: 0.1
+  chunk_size: 100
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10       # ZTF has many epochs per field
+  max_products_per_obs: 3    # One per filter (g, r, i)
+  include_auxiliary: false
+  require_same_mission: true  # ZTF-ZTF pairs only
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 1000    # ZTF images can be large
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/ztf_modern/queries.json"
+  fits_downloads: "output/datasets/ztf_modern/fits_downloads"
+  fits_training: "output/datasets/ztf_modern/fits_training"
+  difference_images: "output/datasets/ztf_modern/difference_images"
+  checkpoint: "output/datasets/ztf_modern/checkpoint.json"
+  chunk_dir: "output/datasets/ztf_modern/chunks"

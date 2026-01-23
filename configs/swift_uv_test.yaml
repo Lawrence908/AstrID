@@ -1,0 +1,38 @@
+dataset_name: swift_uv_test
+description: SWIFT UVOT UV-band supernova training set with matched filter pairs
+query:
+  missions:
+  - SWIFT
+  filters:
+  - uuu
+  - uvw1
+  - uvm2
+  - uvw2
+  archives: null
+  min_year: 2005
+  max_year: 2020
+  days_before: 1095
+  days_after: 730
+  radius_deg: 0.1
+  chunk_size: 250
+  start_index: 0
+  limit: 10
+download:
+  max_obs_per_type: 5
+  max_products_per_obs: 3
+  include_auxiliary: false
+  require_same_mission: true
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 500
+  verify_wcs: true
+output:
+  query_results: /mnt/astrid/AstrID/output/datasets/swift_uv_test/queries.json
+  fits_downloads: /mnt/astrid/AstrID/output/datasets/swift_uv_test/fits_downloads
+  fits_training: /mnt/astrid/AstrID/output/datasets/swift_uv_test/fits_training
+  difference_images: /mnt/astrid/AstrID/output/datasets/swift_uv_test/difference_images
+  checkpoint: output/datasets/swift_uv/checkpoint.json
+  chunk_dir: output/datasets/swift_uv/chunks

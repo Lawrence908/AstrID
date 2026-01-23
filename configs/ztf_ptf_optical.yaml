@@ -1,0 +1,50 @@
+# ZTF + PTF Combined Optical Dataset Configuration
+#
+# This config combines ZTF (2018+) and PTF (2009-2017) for continuous
+# optical transient coverage from 2009 to present.
+#
+# PTF (Palomar Transient Factory) was the predecessor to ZTF, operating
+# 2009-2017. Both surveys use similar instrumentation and filters.
+#
+# Strategy: Query both missions to get maximum temporal coverage.
+
+dataset_name: "ztf_ptf_optical"
+description: "ZTF + PTF combined optical coverage (2009-present)"
+
+# Query parameters for IRSA archive
+query:
+  missions: ["ZTF", "PTF"]
+  filters: null  # Accept all filters
+  min_year: 2009  # PTF operational start
+  max_year: 2025
+  days_before: 730  # 2 years for reference images
+  days_after: 730   # 2 years for science images
+  radius_deg: 0.1
+  chunk_size: 100
+  start_index: 0
+  limit: null
+
+# Download parameters  
+download:
+  max_obs_per_type: 10
+  max_products_per_obs: 3
+  include_auxiliary: false
+  require_same_mission: true  # ZTF-ZTF or PTF-PTF pairs (not cross-mission)
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+  
+# Quality filters
+quality:
+  min_overlap_fraction: 0.85
+  max_file_size_mb: 1000
+  verify_wcs: true
+
+# Output paths
+output:
+  query_results: "output/datasets/ztf_ptf/queries.json"
+  fits_downloads: "output/datasets/ztf_ptf/fits_downloads"
+  fits_training: "output/datasets/ztf_ptf/fits_training"
+  difference_images: "output/datasets/ztf_ptf/difference_images"
+  checkpoint: "output/datasets/ztf_ptf/checkpoint.json"
+  chunk_dir: "output/datasets/ztf_ptf/chunks"
