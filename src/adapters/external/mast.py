@@ -47,11 +47,11 @@ logger = logging.getLogger(__name__)
 class MASTClient:
     """Client for querying MAST astronomical archive."""
 
-    def __init__(self, timeout: int = 30, test_mode: bool = False):
+    def __init__(self, timeout: int = 120, test_mode: bool = False):
         """Initialize MAST client.
 
         Args:
-            timeout: Query timeout in seconds (reduced from 300 for better testing)
+            timeout: Query timeout in seconds (default: 120 = 2 minutes)
             test_mode: If True, use mock data instead of real MAST queries
         """
         self.timeout = timeout
@@ -271,6 +271,7 @@ class MASTClient:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         data_rights: str = "PUBLIC",
+        max_results: int = 10000,
     ) -> list[dict[str, Any]]:
         """Query observations by sky position using real MAST API.
 
@@ -282,6 +283,7 @@ class MASTClient:
             start_time: Start of observation time range
             end_time: End of observation time range
             data_rights: 'PUBLIC' or 'EXCLUSIVE'
+            max_results: Maximum number of observations to process (default: 10000)
 
         Returns:
             List of observation metadata dictionaries
@@ -304,6 +306,7 @@ class MASTClient:
 
             # Import astroquery here to handle missing dependency gracefully
             try:
+                import asyncio
                 import astropy.units as u  # type: ignore
                 from astropy.coordinates import SkyCoord  # type: ignore
                 from astroquery.mast import Observations  # type: ignore
@@ -329,20 +332,87 @@ class MASTClient:
             # as astroquery.mast doesn't support t_min/t_max in query_region
             # We'll filter by observation date after getting results
 
-            # Query MAST
+            # Query MAST with timeout
             self.logger.info(
                 f"Querying MAST for position ({ra}, {dec}) with radius {radius}°"
             )
             self.logger.debug(f"Query parameters: {query_params}")
-            obs_table = Observations.query_region(**query_params)  # type: ignore
-            self.logger.info(f"MAST query returned {len(obs_table)} raw observations")
+            
+            # Run the synchronous query in an executor with timeout
+            loop = asyncio.get_event_loop()
+            try:
+                obs_table = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: Observations.query_region(**query_params)  # type: ignore
+                    ),
+                    timeout=self.timeout
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(
+                    f"MAST query timed out after {self.timeout}s for position ({ra}, {dec})"
+                )
+                raise TimeoutError(
+                    f"MAST query exceeded timeout of {self.timeout}s. "
+                    "This may indicate a very large result set or network issues. "
+                    "Consider reducing the search radius or adding mission filters."
+                )
+            
+            raw_count = len(obs_table)
+            self.logger.info(f"MAST query returned {raw_count} raw observations")
+            
+            # Warn if result set is very large
+            if raw_count > 50000:
+                self.logger.warning(
+                    f"Very large result set ({raw_count} observations). "
+                    f"This may cause memory issues. Consider reducing radius or adding filters."
+                )
+            
+            # Early termination if result set is too large
+            # Reduce multiplier to prevent memory issues (was 10, now 5)
+            if raw_count > max_results * 5:
+                self.logger.warning(
+                    f"Result set ({raw_count}) is much larger than max_results ({max_results}). "
+                    f"Limiting processing to first {max_results * 5} rows to prevent memory issues."
+                )
+                # Truncate obs_table to prevent memory issues
+                obs_table = obs_table[:max_results * 5]
 
             # Convert to list of dictionaries and filter by missions
             observations = []
             filtered_count = 0
             mission_counts = {}  # Track missions in raw results
+            processed_count = 0
+            max_processed = max_results * 2  # Allow processing 2x max_results before stopping
+            
+            # Reduce max_results for very large queries to prevent memory issues
+            if raw_count > 20000:
+                effective_max = min(max_results, 5000)  # Cap at 5000 for very large queries
+                if effective_max < max_results:
+                    self.logger.warning(
+                        f"Reducing max_results from {max_results} to {effective_max} "
+                        f"due to very large result set ({raw_count} observations)"
+                    )
+                    max_results = effective_max
             
             for row in obs_table:
+                processed_count += 1
+                
+                # Progress logging for large result sets
+                if raw_count > 1000 and processed_count % 1000 == 0:
+                    self.logger.debug(
+                        f"Processing row {processed_count}/{raw_count} "
+                        f"({processed_count/raw_count*100:.1f}%)"
+                    )
+                
+                # Early termination if we've processed too many
+                if processed_count > max_processed:
+                    self.logger.warning(
+                        f"Stopping processing after {max_processed} rows to prevent memory issues. "
+                        f"Returning {len(observations)} observations so far."
+                    )
+                    break
+                
                 mission = str(row.get("obs_collection", ""))
                 
                 # Track mission distribution in raw results
@@ -377,6 +447,15 @@ class MASTClient:
                             filtered_count += 1
                             continue
 
+                # Limit final results
+                if len(observations) >= max_results:
+                    self.logger.warning(
+                        f"Reached max_results limit ({max_results}). "
+                        f"Stopping processing. {processed_count - len(observations) - filtered_count} "
+                        f"additional observations were filtered out."
+                    )
+                    break
+
                 obs_dict = {
                     "obs_id": str(row.get("obsid", "")),
                     "target_name": str(row.get("target_name", "")),
@@ -395,7 +474,8 @@ class MASTClient:
                 observations.append(obs_dict)
 
             self.logger.info(
-                f"Found {len(observations)} observations from MAST (filtered {filtered_count} total)"
+                f"Found {len(observations)} observations from MAST (filtered {filtered_count} total, "
+                f"processed {processed_count}/{raw_count} rows)"
             )
             if missions:
                 self.logger.info(f"Filtered for missions: {missions}")
@@ -413,10 +493,21 @@ class MASTClient:
                         )
             if start_time or end_time:
                 self.logger.info(f"Filtered for time range: {start_time} to {end_time}")
+            
+            # Clean up large objects to free memory
+            del obs_table
+            if raw_count > 1000:
+                import gc
+                gc.collect()
+                self.logger.debug("Ran garbage collection after processing large result set")
+            
             return observations
 
         except ValueError as e:
             self.logger.error(f"Invalid input parameters: {e}")
+            raise
+        except TimeoutError:
+            # Re-raise timeout errors
             raise
         except Exception as e:
             self.logger.error(f"Error querying MAST observations: {e}")
