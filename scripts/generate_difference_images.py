@@ -130,7 +130,9 @@ def find_matching_filter_pair(
 
 
 def get_same_mission_sne(manifest_path: Path) -> list[str]:
-    """Get list of SNe with same-mission pairs (SWIFT-SWIFT, GALEX-GALEX, PS1-PS1, etc.)."""
+    """Get list of SNe with same-mission pairs from the training manifest."""
+    if not manifest_path.exists():
+        return []
     with open(manifest_path) as f:
         manifest = json.load(f)
 
@@ -155,6 +157,20 @@ def get_same_mission_sne(manifest_path: Path) -> list[str]:
             same_mission.append(entry["sn_name"])
 
     return same_mission
+
+
+def discover_sne_from_input_dir(input_dir: Path) -> list[str]:
+    """Discover SNe that have a same-mission ref/sci pair on disk (ignore manifest).
+    Use when manifest is missing or stale so we process every SN that has data.
+    """
+    discovered = []
+    for sn_dir in sorted(input_dir.iterdir()):
+        if not sn_dir.is_dir():
+            continue
+        sn_name = sn_dir.name
+        if find_matching_filter_pair(sn_name, input_dir) is not None:
+            discovered.append(sn_name)
+    return discovered
 
 
 def main():
@@ -222,7 +238,22 @@ def main():
         sne_to_process = args.sn
     else:
         sne_to_process = get_same_mission_sne(manifest_path)
-        
+        n_from_manifest = len(sne_to_process)
+        # If manifest is missing or only lists some SNe, discover from directory
+        # so we process every SN that has ref/sci same-mission pair on disk
+        discovered = discover_sne_from_input_dir(input_dir)
+        for sn_name in discovered:
+            if sn_name not in sne_to_process:
+                sne_to_process.append(sn_name)
+        sne_to_process = sorted(sne_to_process)
+        if len(sne_to_process) > n_from_manifest:
+            logger.info(
+                "Manifest had %d same-mission SNe; discovered %d more from directory (total %d)",
+                n_from_manifest,
+                len(sne_to_process) - n_from_manifest,
+                len(sne_to_process),
+            )
+
         # Filter by mission if specified
         if args.mission:
             filtered = []

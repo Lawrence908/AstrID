@@ -9,6 +9,11 @@ This script executes the complete supernova data acquisition pipeline:
 4. Organize into training structure
 5. Generate difference images
 
+Progress/resume:
+    Progress is saved to pipeline_progress.json (next to query results). On the next
+    run, download/organize/differencing skip SNe already completed and only process
+    the remaining list, making reruns much faster. Use --no-skip-completed to reprocess all.
+
 Usage:
     python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml
     python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml --resume
@@ -23,6 +28,7 @@ import json
 import logging
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +43,82 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Progress file lives next to query results (per-dataset)
+PROGRESS_FILENAME = "pipeline_progress.json"
+SAME_MISSION_PAIRS_FILENAME = "same_mission_pairs.json"
+
+
+def progress_path(config: PipelineConfig) -> Path:
+    """Path to the pipeline progress file for this config."""
+    return config.output.query_results.parent / PROGRESS_FILENAME
+
+
+def same_mission_pairs_path(config: PipelineConfig) -> Path:
+    """Path to same_mission_pairs.json produced by filter stage."""
+    return config.output.query_results.parent / SAME_MISSION_PAIRS_FILENAME
+
+
+def load_progress(config: PipelineConfig) -> dict[str, Any]:
+    """Load pipeline progress (completed/attempted SNe). Returns empty dict if missing."""
+    path = progress_path(config)
+    if not path.exists():
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load progress from {path}: {e}")
+        return {}
+
+
+def save_progress(config: PipelineConfig, data: dict[str, Any]) -> None:
+    """Save pipeline progress."""
+    path = progress_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    if "config_path" not in data:
+        data["config_path"] = str(config.output.query_results)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+    logger.info(f"Progress saved to {path}")
+
+
+def get_full_and_remaining_sne(
+    config: PipelineConfig, skip_completed: bool = True
+) -> tuple[list[str] | None, list[str] | None, set[str]]:
+    """Get full SN list and remaining SNe to process (excluding completed).
+
+    Reads same_mission_pairs.json (from filter stage) and pipeline_progress.json.
+
+    Returns:
+        (full_sne, remaining_sne, completed_set)
+        - full_sne: list of all same-mission SNe (None if filter not run yet)
+        - remaining_sne: list to process this run (None = process all)
+        - completed_set: set of SN names already completed through differencing
+    """
+    pairs_path = same_mission_pairs_path(config)
+    if not pairs_path.exists():
+        return None, None, set()
+
+    try:
+        with open(pairs_path) as f:
+            data = json.load(f)
+        full_sne = data.get("same_mission_sne", [])
+        if not full_sne:
+            return [], [], set()
+        full_sne = sorted(full_sne)
+    except Exception as e:
+        logger.warning(f"Could not load same_mission_pairs from {pairs_path}: {e}")
+        return None, None, set()
+
+    if not skip_completed:
+        return full_sne, full_sne, set()
+
+    progress = load_progress(config)
+    completed_set = set(progress.get("completed_sne", []))
+    remaining = [s for s in full_sne if s not in completed_set]
+    return full_sne, remaining, completed_set
 
 
 def run_stage(
@@ -184,22 +266,24 @@ def run_download_stage(
     config: PipelineConfig, dry_run: bool = False, **kwargs: Any
 ) -> bool:
     """Run the download stage."""
-    script_path = project_root / "scripts" / "download_sn_fits.py"
+    skip_completed = kwargs.get("skip_completed", True)
+    full_sne, remaining_sne, completed_set = get_full_and_remaining_sne(
+        config, skip_completed=skip_completed
+    )
+    if full_sne is not None and not remaining_sne:
+        logger.info(
+            "All SNe already completed (see %s); skipping download.",
+            progress_path(config),
+        )
+        return True
 
-    # Use filtered results if available, otherwise use query results
-    filtered_output = config.output.query_results.parent / "same_mission_pairs.json"
-    if filtered_output.exists():
-        # Need to extract the detailed results from same_mission_pairs.json
-        # For now, use the original query results
-        input_file = config.output.query_results
-    else:
-        input_file = config.output.query_results
+    script_path = project_root / "scripts" / "download_sn_fits.py"
 
     cmd = [
         sys.executable,
         str(script_path),
         "--query-results",
-        str(input_file),
+        str(config.output.query_results),
         "--output-dir",
         str(config.output.fits_downloads),
         "--max-obs",
@@ -207,6 +291,10 @@ def run_download_stage(
         "--max-products-per-obs",
         str(config.download.max_products_per_obs),
     ]
+
+    if completed_set and full_sne is not None:
+        cmd.extend(["--skip-sn"] + sorted(completed_set))
+        logger.info("Resuming: skipping %d already-completed SNe", len(completed_set))
 
     if config.download.require_same_mission:
         cmd.append("--filter-has-both")
@@ -240,6 +328,17 @@ def run_organize_stage(
     config: PipelineConfig, dry_run: bool = False, **kwargs: Any
 ) -> bool:
     """Run the organization stage."""
+    skip_completed = kwargs.get("skip_completed", True)
+    full_sne, remaining_sne, completed_set = get_full_and_remaining_sne(
+        config, skip_completed=skip_completed
+    )
+    if full_sne is not None and not remaining_sne:
+        logger.info(
+            "All SNe already completed (see %s); skipping organize.",
+            progress_path(config),
+        )
+        return True
+
     script_path = project_root / "scripts" / "organize_training_pairs.py"
 
     cmd = [
@@ -251,6 +350,10 @@ def run_organize_stage(
         str(config.output.fits_training),
         "--clean",
     ]
+
+    if remaining_sne and full_sne is not None:
+        cmd.extend(["--sn"] + remaining_sne)
+        logger.info("Resuming: organizing only %d remaining SNe", len(remaining_sne))
 
     # Add optional flags
     if kwargs.get("symlink", False):
@@ -277,6 +380,17 @@ def run_differencing_stage(
     config: PipelineConfig, dry_run: bool = False, **kwargs: Any
 ) -> bool:
     """Run the differencing stage."""
+    skip_completed = kwargs.get("skip_completed", True)
+    full_sne, remaining_sne, completed_set = get_full_and_remaining_sne(
+        config, skip_completed=skip_completed
+    )
+    if full_sne is not None and not remaining_sne:
+        logger.info(
+            "All SNe already completed (see %s); skipping differencing.",
+            progress_path(config),
+        )
+        return True
+
     script_path = project_root / "scripts" / "generate_difference_images.py"
 
     cmd = [
@@ -287,6 +401,10 @@ def run_differencing_stage(
         "--output-dir",
         str(config.output.difference_images),
     ]
+
+    if remaining_sne and full_sne is not None:
+        cmd.extend(["--sn"] + remaining_sne)
+        logger.info("Resuming: differencing only %d remaining SNe", len(remaining_sne))
 
     if kwargs.get("visualize", False):
         cmd.append("--visualize")
@@ -302,10 +420,34 @@ def run_differencing_stage(
     try:
         result = subprocess.run(cmd, check=True, cwd=project_root)
         logger.info("✅ Differencing stage completed successfully")
+        if result.returncode == 0:
+            _update_progress_after_differencing(config)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Differencing stage failed: {e}")
         return False
+
+
+def _update_progress_after_differencing(config: PipelineConfig) -> None:
+    """Read processing_summary.json and merge successfully processed SNe into pipeline progress."""
+    summary_path = config.output.difference_images / "processing_summary.json"
+    if not summary_path.exists():
+        return
+    try:
+        with open(summary_path) as f:
+            summary = json.load(f)
+        results = summary.get("results", [])
+        newly_completed = [r["sn_name"] for r in results if r.get("sn_name")]
+        if not newly_completed:
+            return
+        progress = load_progress(config)
+        completed = set(progress.get("completed_sne", []))
+        completed.update(newly_completed)
+        progress["completed_sne"] = sorted(completed)
+        save_progress(config, progress)
+        logger.info("Progress updated: %d SNe now marked completed (total %d)", len(newly_completed), len(completed))
+    except Exception as e:
+        logger.warning("Could not update progress from differencing summary: %s", e)
 
 
 def generate_pipeline_report(config: PipelineConfig) -> None:
@@ -409,6 +551,11 @@ def main() -> None:
         type=str,
         help="Filter to specific mission in differencing stage",
     )
+    parser.add_argument(
+        "--no-skip-completed",
+        action="store_true",
+        help="Do not skip SNe already in pipeline_progress.json (reprocess all)",
+    )
 
     args = parser.parse_args()
 
@@ -429,6 +576,20 @@ def main() -> None:
         for warning in warnings:
             logger.warning(f"  - {warning}")
 
+    # Log resume status when progress exists
+    if not args.no_skip_completed:
+        full_sne, remaining_sne, completed_set = get_full_and_remaining_sne(
+            config, skip_completed=True
+        )
+        if full_sne is not None and completed_set:
+            n_remaining = len(full_sne) - len(completed_set)
+            logger.info(
+                "Resume: %d SNe already completed, %d remaining (progress: %s)",
+                len(completed_set),
+                n_remaining,
+                progress_path(config),
+            )
+
     # Determine which stages to run
     if args.stage:
         stages = [args.stage]
@@ -437,12 +598,14 @@ def main() -> None:
 
     # Run stages
     success = True
+    skip_completed = not args.no_skip_completed
     for stage in stages:
         stage_kwargs = {
             "symlink": args.symlink,
             "decompress": args.decompress,
             "visualize": args.visualize,
             "mission": args.mission,
+            "skip_completed": skip_completed,
         }
         if not run_stage(
             stage,

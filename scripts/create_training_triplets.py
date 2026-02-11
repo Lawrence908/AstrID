@@ -129,6 +129,30 @@ def normalize_image(image: np.ndarray, clip_percentile: float = 99.5) -> np.ndar
     return normalized.astype(np.float32)
 
 
+def ref_pixel_to_science_pixel(
+    ref_x: float,
+    ref_y: float,
+    ref_header: dict[str, Any],
+    sci_header: dict[str, Any],
+) -> tuple[float, float] | None:
+    """Convert reference-image pixel coords to science-image pixel coords via WCS.
+
+    The difference image (and SN_X, SN_Y) are on the reference grid. The science
+    FITS has its own WCS; using ref coords there would cut the wrong sky location.
+    Returns (sci_x, sci_y) or None if WCS conversion fails.
+    """
+    try:
+        ref_wcs = WCS(ref_header, naxis=2)
+        sci_wcs = WCS(sci_header, naxis=2)
+        if not ref_wcs.has_celestial or not sci_wcs.has_celestial:
+            return None
+        world = ref_wcs.pixel_to_world(ref_x, ref_y)
+        sci_xy = sci_wcs.world_to_pixel(world)
+        return (float(sci_xy[0]), float(sci_xy[1]))
+    except Exception:
+        return None
+
+
 def extract_cutout(
     image: np.ndarray, center_x: float, center_y: float, size: int = 63
 ) -> np.ndarray | None:
@@ -208,7 +232,12 @@ def create_triplet(
     cutout_size: int,
     label: int,
 ) -> ImageTriplet | None:
-    """Create a single training triplet from FITS files."""
+    """Create a single training triplet from FITS files.
+
+    center_x, center_y are in reference/difference image pixel coordinates (same grid).
+    The science FITS has a different WCS; we convert ref pixel -> sky -> science pixel
+    so all three cutouts are centered on the same sky position.
+    """
     # Load images
     ref_data, ref_header = load_fits_data(ref_path)
     sci_data, sci_header = load_fits_data(sci_path)
@@ -217,9 +246,17 @@ def create_triplet(
     if ref_data is None or sci_data is None or diff_data is None:
         return None
 
-    # Extract cutouts
+    # Science image has its own WCS — convert ref-pixel center to science-pixel center
+    sci_center_x, sci_center_y = center_x, center_y
+    sci_coords = ref_pixel_to_science_pixel(
+        center_x, center_y, ref_header, sci_header
+    )
+    if sci_coords is not None:
+        sci_center_x, sci_center_y = sci_coords
+
+    # Extract cutouts: ref and diff share reference grid; science uses science grid
     ref_cutout = extract_cutout(ref_data, center_x, center_y, cutout_size)
-    sci_cutout = extract_cutout(sci_data, center_x, center_y, cutout_size)
+    sci_cutout = extract_cutout(sci_data, sci_center_x, sci_center_y, cutout_size)
     diff_cutout = extract_cutout(diff_data, center_x, center_y, cutout_size)
 
     if ref_cutout is None or sci_cutout is None or diff_cutout is None:
@@ -421,7 +458,11 @@ def visualize_triplet(
     triplet: ImageTriplet, output_path: Path, show_metadata: bool = True
 ) -> None:
     """Create a visualization PNG for a single triplet.
-    
+
+    Reference and science panels use gray; the difference panel uses RdBu_r
+    so positive residuals (new source) appear red and negative (over-subtraction) blue.
+    Overlap is shown correctly whether the header stores fraction (0-1) or percentage (0-100).
+
     Args:
         triplet: ImageTriplet to visualize
         output_path: Path to save PNG
@@ -431,9 +472,13 @@ def visualize_triplet(
     
     images = [triplet.reference, triplet.science, triplet.difference]
     titles = ["Reference (pre-SN)", "Science (with SN)", "Difference (sci - ref)"]
+    # Use diverging colormap for difference so positive (new source) vs negative (residuals) is clear
+    cmaps = ["gray", "gray", "RdBu_r"]
+    vmins = [0, 0, 0]
+    vmaxs = [1, 1, 1]
     
-    for ax, img, title in zip(axes, images, titles):
-        im = ax.imshow(img, cmap="gray", origin="lower", vmin=0, vmax=1)
+    for ax, img, title, cmap, vmin, vmax in zip(axes, images, titles, cmaps, vmins, vmaxs):
+        im = ax.imshow(img, cmap=cmap, origin="lower", vmin=vmin, vmax=vmax)
         ax.set_title(title, fontsize=12)
         ax.axis("off")
         
@@ -463,7 +508,9 @@ def visualize_triplet(
         
         if "overlap" in triplet.metadata:
             overlap = triplet.metadata["overlap"]
-            title_parts.append(f"overlap: {overlap:.1%}")
+            # Header may store fraction (0–1) or percentage (0–100)
+            overlap_pct = overlap * 100 if overlap <= 1 else overlap
+            title_parts.append(f"overlap: {overlap_pct:.1f}%")
         
         title = " | ".join(title_parts)
     else:

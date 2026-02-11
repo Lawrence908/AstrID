@@ -677,6 +677,13 @@ def main() -> None:
         help="Limit number of supernovae processed",
     )
     parser.add_argument(
+        "--skip-sn",
+        nargs="*",
+        default=None,
+        metavar="SN_NAME",
+        help="SN names to skip (already processed). Enables resume.",
+    )
+    parser.add_argument(
         "--min-viable-pairs",
         type=int,
         default=None,
@@ -776,6 +783,12 @@ def main() -> None:
 
     if args.limit:
         filtered_results = filtered_results[: args.limit]
+
+    if args.skip_sn:
+        skip_set = set(args.skip_sn)
+        before = len(filtered_results)
+        filtered_results = [e for e in filtered_results if e.get("sn_name") not in skip_set]
+        logger.info("Skipping %d already-completed SNe (--skip-sn); %d remaining", before - len(filtered_results), len(filtered_results))
 
     if not filtered_results:
         logger.warning("⚠️  No supernovae to process after filtering!")
