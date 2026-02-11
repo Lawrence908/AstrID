@@ -35,6 +35,7 @@ from src.domains.differencing.pipeline import (
     SNDifferencingPipeline,
     detect_mission_from_filename,
 )
+from src.utils.fits_loader import load_fits_with_wcs
 
 warnings.filterwarnings("ignore")
 
@@ -223,6 +224,18 @@ def main():
         default=10,
         help="Number of SNe to process before forcing garbage collection (default: 10)",
     )
+    parser.add_argument(
+        "--verify-wcs",
+        action="store_true",
+        default=True,
+        help="Skip ref/sci pairs that lack valid celestial WCS (default: True)",
+    )
+    parser.add_argument(
+        "--no-verify-wcs",
+        action="store_false",
+        dest="verify_wcs",
+        help="Do not skip pairs with invalid WCS",
+    )
 
     args = parser.parse_args()
 
@@ -284,6 +297,26 @@ def main():
             continue
 
         ref_path, sci_path, filter_name, mission_name = pair
+
+        if args.verify_wcs:
+            try:
+                load_fits_with_wcs(ref_path, verify_wcs=True, memmap=False)
+            except ValueError as e:
+                logger.warning(
+                    "  Skipping %s: reference has no valid celestial WCS: %s",
+                    sn_name,
+                    e,
+                )
+                continue
+            try:
+                load_fits_with_wcs(sci_path, verify_wcs=True, memmap=False)
+            except ValueError as e:
+                logger.warning(
+                    "  Skipping %s: science has no valid celestial WCS: %s",
+                    sn_name,
+                    e,
+                )
+                continue
 
         try:
             diff, sig, mask, result = pipeline.process(
@@ -370,17 +403,15 @@ def main():
                     axes[2].imshow(mask, origin="lower", cmap="gray")
                     axes[2].set_title("SN Mask")
 
-                    # Mark SN position
+                    # Mark SN position with gap-centered crosshair
                     if result.sn_pixel:
+                        px, py = result.sn_pixel[0], result.sn_pixel[1]
+                        gap, arm, color, lw = 3, 10, "lime", 2
                         for ax in axes[:3]:
-                            ax.scatter(
-                                [result.sn_pixel[0]],
-                                [result.sn_pixel[1]],
-                                marker="+",
-                                s=100,
-                                c="lime",
-                                linewidths=2,
-                            )
+                            ax.plot([px - arm, px - gap], [py, py], color=color, lw=lw)
+                            ax.plot([px + gap, px + arm], [py, py], color=color, lw=lw)
+                            ax.plot([px, px], [py - arm, py - gap], color=color, lw=lw)
+                            ax.plot([px, px], [py + gap, py + arm], color=color, lw=lw)
 
                     # Histogram
                     valid = sig[np.isfinite(sig)]

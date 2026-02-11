@@ -19,10 +19,11 @@ from pathlib import Path
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from astropy.coordinates import SkyCoord
-from astropy.io import fits
 from astropy.stats import SigmaClip, sigma_clipped_stats
 from astropy.wcs import WCS
 from photutils.background import Background2D, MedianBackground
+
+from src.utils.fits_loader import load_fits_with_wcs
 from photutils.detection import DAOStarFinder
 from reproject import reproject_interp
 
@@ -122,22 +123,12 @@ class SNDifferencingPipeline:
         self.detection_threshold = detection_threshold
         self.mask_radius = mask_radius
 
-    def load_fits(self, filepath: Path) -> tuple[np.ndarray, dict, WCS]:
-        """Load FITS image, header, and WCS."""
-        with fits.open(filepath, memmap=True) as hdul:
-            for hdu in hdul:
-                if hdu.data is not None and len(hdu.data.shape) >= 2:
-                    # Use float32 instead of float64 to save memory
-                    data = hdu.data.astype(np.float32)
-                    header = dict(hdu.header)
-                    if len(data.shape) == 3:
-                        data = data[0]
-                    try:
-                        wcs = WCS(hdu.header, naxis=2)
-                    except Exception:
-                        wcs = None
-                    return data, header, wcs
-        raise ValueError(f"No image data found in {filepath}")
+    def load_fits(self, filepath: Path) -> tuple[np.ndarray, dict, WCS | None]:
+        """Load FITS image, header, and WCS via shared loader (preserves fits.Header internally)."""
+        data, header, wcs = load_fits_with_wcs(
+            filepath, verify_wcs=False, memmap=True, return_dict_header=True
+        )
+        return data, header, wcs
 
     def estimate_background(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Estimate and subtract background."""
@@ -308,14 +299,29 @@ class SNDifferencingPipeline:
         except Exception:
             n_detections = 0
 
-        # Get SN pixel position
+        # Get SN pixel position (reference grid; diff is on same grid)
         sn_pixel = None
         if sn_coords is not None and ref_wcs is not None:
             try:
                 x, y = ref_wcs.world_to_pixel(sn_coords)
-                sn_pixel = (float(x), float(y))
-            except Exception:
-                pass
+                x, y = float(x), float(y)
+                height, width = ref_data.shape
+                if 0 <= x < width and 0 <= y < height:
+                    sn_pixel = (x, y)
+                    logger.debug(f"SN pixel position: ({x:.2f}, {y:.2f})")
+                    half = 31  # typical cutout half-size
+                    if x < half or x >= width - half or y < half or y >= height - half:
+                        logger.warning(
+                            f"SN position ({x:.1f}, {y:.1f}) near image edge; "
+                            f"cutout may fail or be clipped"
+                        )
+                else:
+                    logger.warning(
+                        f"SN position ({x:.1f}, {y:.1f}) outside image bounds "
+                        f"(0..{width}, 0..{height}), skipping"
+                    )
+            except Exception as e:
+                logger.warning(f"WCS world_to_pixel failed for SN coords: {e}")
 
         # Create mask
         sn_mask = self.create_sn_mask(diff.shape, sn_pixel)

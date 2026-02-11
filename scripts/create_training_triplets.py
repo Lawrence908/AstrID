@@ -42,6 +42,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
+from src.utils.fits_loader import load_fits_with_wcs
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -75,34 +77,18 @@ class ImageTriplet:
     center_x: float
     center_y: float
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Sub-pixel offset of SN from cutout center (for crosshair placement)
+    crosshair_offset: tuple[float, float] = (0.0, 0.0)
 
 
-def load_fits_data(fits_path: Path) -> tuple[np.ndarray | None, dict[str, Any]]:
-    """Load FITS file and extract data + metadata."""
+def load_fits_data(fits_path: Path) -> tuple[np.ndarray | None, fits.Header | dict[str, Any]]:
+    """Load FITS file and extract data + header via shared loader (preserves fits.Header)."""
     try:
-        with fits.open(fits_path) as hdul:
-            # Try primary HDU first
-            data = hdul[0].data
-            header = dict(hdul[0].header)
-
-            # If primary is empty, try HDU 1 (common for SWIFT .img files)
-            if data is None and len(hdul) > 1:
-                data = hdul[1].data
-                header.update(dict(hdul[1].header))
-
-            if data is None:
-                logger.warning(f"No data found in {fits_path}")
-                return None, {}
-
-            data = data.astype(np.float32)
-
-            # Handle different dimensionalities
-            if data.ndim > 2:
-                # Take first 2D slice
-                data = data[0] if data.ndim == 3 else data[0, 0]
-
-            return data, header
-    except Exception as e:
+        data, header, _ = load_fits_with_wcs(
+            fits_path, verify_wcs=False, memmap=False, return_dict_header=False
+        )
+        return data, header
+    except ValueError as e:
         logger.warning(f"Failed to load {fits_path}: {e}")
         return None, {}
 
@@ -132,13 +118,14 @@ def normalize_image(image: np.ndarray, clip_percentile: float = 99.5) -> np.ndar
 def ref_pixel_to_science_pixel(
     ref_x: float,
     ref_y: float,
-    ref_header: dict[str, Any],
-    sci_header: dict[str, Any],
+    ref_header: fits.Header | dict[str, Any],
+    sci_header: fits.Header | dict[str, Any],
 ) -> tuple[float, float] | None:
     """Convert reference-image pixel coords to science-image pixel coords via WCS.
 
     The difference image (and SN_X, SN_Y) are on the reference grid. The science
     FITS has its own WCS; using ref coords there would cut the wrong sky location.
+    Headers from load_fits_data are fits.Header for reliable WCS reconstruction.
     Returns (sci_x, sci_y) or None if WCS conversion fails.
     """
     try:
@@ -155,28 +142,36 @@ def ref_pixel_to_science_pixel(
 
 def extract_cutout(
     image: np.ndarray, center_x: float, center_y: float, size: int = 63
-) -> np.ndarray | None:
-    """Extract a square cutout centered at (center_x, center_y)."""
+) -> tuple[np.ndarray | None, tuple[float, float]]:
+    """Extract a square cutout centered at (center_x, center_y).
+
+    Uses round() for symmetric cutout and returns sub-pixel offset from cutout
+    center so the crosshair can be placed precisely on the SN position.
+
+    Returns:
+        (cutout, (offset_x, offset_y)) where offset is center_x - round(center_x)
+        in cutout coordinates (same for y). If cutout would be out of bounds,
+        returns (None, (0, 0)).
+    """
     h, w = image.shape
     half_size = size // 2
+    cx, cy = round(center_x), round(center_y)
+    offset_x = center_x - cx
+    offset_y = center_y - cy
 
-    # Calculate bounds
-    x_min = int(center_x - half_size)
-    x_max = int(center_x + half_size + 1)
-    y_min = int(center_y - half_size)
-    y_max = int(center_y + half_size + 1)
+    x_min = cx - half_size
+    x_max = cx + half_size + 1
+    y_min = cy - half_size
+    y_max = cy + half_size + 1
 
-    # Check if cutout is within bounds
     if x_min < 0 or x_max > w or y_min < 0 or y_max > h:
-        return None
+        return None, (0.0, 0.0)
 
     cutout = image[y_min:y_max, x_min:x_max]
-
-    # Ensure exact size (handle edge cases)
     if cutout.shape != (size, size):
-        return None
+        return None, (0.0, 0.0)
 
-    return cutout
+    return cutout, (offset_x, offset_y)
 
 
 def generate_bogus_positions(
@@ -255,9 +250,9 @@ def create_triplet(
         sci_center_x, sci_center_y = sci_coords
 
     # Extract cutouts: ref and diff share reference grid; science uses science grid
-    ref_cutout = extract_cutout(ref_data, center_x, center_y, cutout_size)
-    sci_cutout = extract_cutout(sci_data, sci_center_x, sci_center_y, cutout_size)
-    diff_cutout = extract_cutout(diff_data, center_x, center_y, cutout_size)
+    ref_cutout, ref_offset = extract_cutout(ref_data, center_x, center_y, cutout_size)
+    sci_cutout, _ = extract_cutout(sci_data, sci_center_x, sci_center_y, cutout_size)
+    diff_cutout, _ = extract_cutout(diff_data, center_x, center_y, cutout_size)
 
     if ref_cutout is None or sci_cutout is None or diff_cutout is None:
         return None
@@ -286,6 +281,7 @@ def create_triplet(
         center_x=center_x,
         center_y=center_y,
         metadata=metadata,
+        crosshair_offset=ref_offset,
     )
 
 
@@ -293,7 +289,7 @@ def augment_triplet(triplet: ImageTriplet) -> list[ImageTriplet]:
     """Create augmented versions of a triplet (rotation, flipping)."""
     augmented = [triplet]  # Include original
 
-    # 90° rotations
+    # 90° rotations (offset not transformed; center stays at center for augmented)
     for k in [1, 2, 3]:
         aug = ImageTriplet(
             sn_name=triplet.sn_name,
@@ -306,6 +302,7 @@ def augment_triplet(triplet: ImageTriplet) -> list[ImageTriplet]:
             center_x=triplet.center_x,
             center_y=triplet.center_y,
             metadata={**triplet.metadata, "augmentation": f"rot{k*90}"},
+            crosshair_offset=(0.0, 0.0),
         )
         augmented.append(aug)
 
@@ -321,6 +318,7 @@ def augment_triplet(triplet: ImageTriplet) -> list[ImageTriplet]:
         center_x=triplet.center_x,
         center_y=triplet.center_y,
         metadata={**triplet.metadata, "augmentation": "flip_lr"},
+        crosshair_offset=(-triplet.crosshair_offset[0], triplet.crosshair_offset[1]),
     )
     augmented.append(aug)
 
@@ -336,6 +334,7 @@ def augment_triplet(triplet: ImageTriplet) -> list[ImageTriplet]:
         center_x=triplet.center_x,
         center_y=triplet.center_y,
         metadata={**triplet.metadata, "augmentation": "flip_ud"},
+        crosshair_offset=(triplet.crosshair_offset[0], -triplet.crosshair_offset[1]),
     )
     augmented.append(aug)
 
@@ -454,6 +453,23 @@ def process_sn(
     return triplets
 
 
+def _draw_crosshair(
+    ax: plt.Axes,
+    cx: float,
+    cy: float,
+    *,
+    gap: float = 3,
+    arm: float = 10,
+    color: str = "red",
+    lw: float = 2,
+) -> None:
+    """Draw a crosshair with a blank gap at center so the exact coordinates are visible."""
+    ax.plot([cx - arm, cx - gap], [cy, cy], color=color, lw=lw)
+    ax.plot([cx + gap, cx + arm], [cy, cy], color=color, lw=lw)
+    ax.plot([cx, cx], [cy - arm, cy - gap], color=color, lw=lw)
+    ax.plot([cx, cx], [cy + gap, cy + arm], color=color, lw=lw)
+
+
 def visualize_triplet(
     triplet: ImageTriplet, output_path: Path, show_metadata: bool = True
 ) -> None:
@@ -485,9 +501,11 @@ def visualize_triplet(
         # Add colorbar
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         
-        # Mark center with crosshair
+        # Mark SN position with gap-centered crosshair (sub-pixel offset from cutout center)
         h, w = img.shape
-        ax.plot([w/2], [h/2], "r+", markersize=15, markeredgewidth=2)
+        ox, oy = triplet.crosshair_offset
+        cx, cy = w / 2 + ox, h / 2 + oy
+        _draw_crosshair(ax, cx, cy, gap=3, arm=10, color="red", lw=2)
     
     # Create title with metadata
     label_str = "REAL" if triplet.label == 1 else "BOGUS"
