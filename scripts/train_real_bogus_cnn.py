@@ -164,6 +164,18 @@ def main() -> None:
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device (cuda/cpu)",
     )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=15,
+        help="Early stopping: stop after this many epochs without val AUCPR improvement",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-2,
+        help="L2 regularization (AdamW). Use higher with small datasets.",
+    )
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -175,6 +187,12 @@ def main() -> None:
     n_real = int((labels == 1).sum())
     n_bogus = int((labels == 0).sum())
     logger.info("Samples: %d real, %d bogus, total %d", n_real, n_bogus, len(images))
+    if len(images) < 200:
+        logger.warning(
+            "Very small dataset (%d samples). Val metrics will have high variance "
+            "and AUCPR=1.0 likely means overfitting; add more data for reliable estimates.",
+            len(images),
+        )
 
     # Train/val split (stratified by label)
     rng = np.random.default_rng(args.seed)
@@ -208,11 +226,14 @@ def main() -> None:
         [n_bogus / max(n_real, 1)], dtype=torch.float32, device=device
     )
 
-    # Model and optimizer
+    # Model and optimizer (AdamW for weight decay)
     model = RealBogusCNN(in_channels=3).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
 
     best_aucpr = 0.0
+    epochs_without_improvement = 0
     history: list[dict] = []
 
     for epoch in range(1, args.epochs + 1):
@@ -237,6 +258,7 @@ def main() -> None:
 
         if aucpr > best_aucpr:
             best_aucpr = aucpr
+            epochs_without_improvement = 0
             ckpt_path = args.output_dir / "best.pt"
             torch.save({
                 "epoch": epoch,
@@ -246,6 +268,14 @@ def main() -> None:
                 "val_f1": f1,
             }, ckpt_path)
             logger.info("  -> saved best checkpoint to %s", ckpt_path)
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= args.patience:
+                logger.info(
+                    "Early stopping: no val AUCPR improvement for %d epochs",
+                    args.patience,
+                )
+                break
 
     # Save final model and history
     torch.save(model.state_dict(), args.output_dir / "last.pt")
