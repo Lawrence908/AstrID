@@ -1,0 +1,53 @@
+# Full Catalog — All Missions, Full Time Range
+#
+# Single pipeline run over the entire supernova catalog with all MAST missions.
+# Use when you want the largest possible dataset in one go (no year or index limits).
+#
+# Trade-off vs best_yield_combined:
+#   - best_yield: 2005–2011, GALEX+SWIFT+HST — smaller, highest density of
+#     same-mission pairs (GALEX golden era). Often enough for a large training set.
+#   - full_catalog: 2000–present, all missions — maximum SNe and missions;
+#     more runtime, more disk; some missions sparse in early years.
+#
+# OOM note: If the query stage is killed (SIGKILL/OOM), run with fewer other
+# heavy jobs, or reduce chunk_size further (e.g. 100). Dense fields (e.g. CDFS)
+# can make MAST return very large result sets.
+
+dataset_name: "full_catalog"
+description: "Entire catalog, all MAST missions (TESS, GALEX, PS1, SWIFT, HST), 2000–present"
+
+# Query parameters
+query:
+  missions: ["TESS", "GALEX", "PS1", "SWIFT", "HST"]
+  filters: null
+  min_year: 2000   # Broad start (GALEX/SWIFT/PS1 ramp up 2003–2010)
+  max_year: null   # No cap — through present
+  days_before: 1095
+  days_after: 730
+  radius_deg: 0.15
+  chunk_size: 150   # Smaller than 250 to reduce peak memory (combine + MAST); increase if you have RAM to spare
+  start_index: 0
+  limit: null
+
+# Download parameters (same as best_yield)
+download:
+  max_obs_per_type: 10
+  max_products_per_obs: 5
+  include_auxiliary: false
+  require_same_mission: true
+  verify_fits: true
+  skip_reference: false
+  skip_science: false
+
+quality:
+  min_overlap_fraction: 0.80
+  max_file_size_mb: 500
+  verify_wcs: true
+
+output:
+  query_results: "output/datasets/full_catalog/queries.json"
+  fits_downloads: "output/datasets/full_catalog/fits_downloads"
+  fits_training: "output/datasets/full_catalog/fits_training"
+  difference_images: "output/datasets/full_catalog/difference_images"
+  checkpoint: "output/datasets/full_catalog/checkpoint.json"
+  chunk_dir: "output/datasets/full_catalog/chunks"
