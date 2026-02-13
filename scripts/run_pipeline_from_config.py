@@ -8,6 +8,7 @@ This script executes the complete supernova data acquisition pipeline:
 3. Download FITS files
 4. Organize into training structure
 5. Generate difference images
+6. Create training triplets (63×63 cutouts by default; optional visualization)
 
 Progress/resume:
     Progress is saved to pipeline_progress.json (next to query results). On the next
@@ -148,7 +149,7 @@ def run_stage(
     """Run a single pipeline stage.
 
     Args:
-        stage_name: Name of stage to run (query, filter, download, organize, differencing)
+        stage_name: Name of stage to run (query, filter, download, organize, differencing, triplets)
         config: Pipeline configuration
         dry_run: If True, only print what would be executed
         **kwargs: Additional arguments to pass to stage
@@ -170,6 +171,8 @@ def run_stage(
         return run_organize_stage(config, dry_run=dry_run, **kwargs)
     elif stage_name == "differencing":
         return run_differencing_stage(config, dry_run=dry_run, **kwargs)
+    elif stage_name == "triplets":
+        return run_triplets_stage(config, dry_run=dry_run, **kwargs)
     else:
         logger.error(f"Unknown stage: {stage_name}")
         return False
@@ -451,6 +454,67 @@ def run_differencing_stage(
         return False
 
 
+def run_triplets_stage(
+    config: PipelineConfig, dry_run: bool = False, **kwargs: Any
+) -> bool:
+    """Run the training triplets stage (cutouts for CNN training + optional viz).
+
+    Uses 63×63 cutouts by default (ZTF/Braai standard; see SUPERNOVA_DETECTION_PIPELINE_GUIDE).
+    Override with --triplets-cutout (e.g. 127 or 255 for visualization).
+    """
+    script_path = project_root / "scripts" / "create_training_triplets.py"
+    fits_dir = config.output.fits_training
+    diff_dir = config.output.difference_images
+    # Output next to difference_images, e.g. .../training_triplets
+    output_dir = diff_dir.parent / "training_triplets"
+
+    cutout = int(kwargs.get("triplets_cutout", 63))
+    bogus_ratio = float(kwargs.get("triplets_bogus_ratio", 1.0))
+    augment = bool(kwargs.get("triplets_augment", False))
+    visualize = bool(kwargs.get("visualize", False) or kwargs.get("triplets_visualize", False))
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--fits-dir",
+        str(fits_dir),
+        "--diff-dir",
+        str(diff_dir),
+        "--output-dir",
+        str(output_dir),
+        "--cutout-size",
+        str(cutout),
+        "--bogus-ratio",
+        str(bogus_ratio),
+    ]
+    if augment:
+        cmd.append("--augment")
+    if visualize:
+        cmd.append("--visualize")
+
+    logger.info(f"Command: {' '.join(cmd)}")
+    logger.info("Triplets output: %s (cutout %dx%d)", output_dir, cutout, cutout)
+
+    if dry_run:
+        logger.info("[DRY RUN] Would execute triplets stage")
+        return True
+
+    if not diff_dir.exists():
+        logger.warning(
+            "Difference images dir %s not found; run differencing stage first. Skipping triplets.",
+            diff_dir,
+        )
+        return True  # Don't fail pipeline; triplets are optional after differencing
+
+    try:
+        result = subprocess.run(cmd, check=True, cwd=project_root)
+        logger.info("✅ Triplets stage completed successfully")
+        return result.returncode == 0
+    except subprocess.CalledProcessError as e:
+        logger.error("❌ Triplets stage failed: %s", e)
+        return False
+
+
 def _update_progress_after_differencing(config: PipelineConfig) -> None:
     """Read processing_summary.json and merge successfully processed SNe into pipeline progress."""
     summary_path = config.output.difference_images / "processing_summary.json"
@@ -540,7 +604,7 @@ def main() -> None:
     parser.add_argument(
         "--stage",
         type=str,
-        choices=["query", "filter", "download", "organize", "differencing"],
+        choices=["query", "filter", "download", "organize", "differencing", "triplets"],
         default=None,
         help="Run only a specific stage (default: run all stages)",
     )
@@ -578,6 +642,23 @@ def main() -> None:
         "--no-skip-completed",
         action="store_true",
         help="Do not skip SNe already in pipeline_progress.json (reprocess all)",
+    )
+    parser.add_argument(
+        "--triplets-cutout",
+        type=int,
+        default=63,
+        metavar="N",
+        help="Triplet cutout size in pixels (default: 63, ZTF/Braai standard)",
+    )
+    parser.add_argument(
+        "--triplets-augment",
+        action="store_true",
+        help="Apply augmentation in triplets stage (rotations, flips)",
+    )
+    parser.add_argument(
+        "--triplets-visualize",
+        action="store_true",
+        help="Generate triplet visualization PNGs (in addition to --visualize)",
     )
 
     args = parser.parse_args()
@@ -617,7 +698,7 @@ def main() -> None:
     if args.stage:
         stages = [args.stage]
     else:
-        stages = ["query", "filter", "download", "organize", "differencing"]
+        stages = ["query", "filter", "download", "organize", "differencing", "triplets"]
 
     # Run stages
     success = True
@@ -629,6 +710,9 @@ def main() -> None:
             "visualize": args.visualize,
             "mission": args.mission,
             "skip_completed": skip_completed,
+            "triplets_cutout": args.triplets_cutout,
+            "triplets_augment": args.triplets_augment,
+            "triplets_visualize": args.triplets_visualize,
         }
         if not run_stage(
             stage,
