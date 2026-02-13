@@ -15,10 +15,10 @@ Progress/resume:
     the remaining list, making reruns much faster. Use --no-skip-completed to reprocess all.
 
 Usage:
-    python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml
-    python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml --resume
-    python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml --dry-run
-    python scripts/run_pipeline_from_config.py --config configs/swift_uv_dataset.yaml --stage download
+    python scripts/run_pipeline_from_config.py --config configs/full_catalog.yaml
+    python scripts/run_pipeline_from_config.py --config configs/full_catalog.yaml --resume
+    python scripts/run_pipeline_from_config.py --config configs/full_catalog.yaml --dry-run
+    python scripts/run_pipeline_from_config.py --config configs/full_catalog.yaml --stage download
 """
 
 from __future__ import annotations
@@ -26,11 +26,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# Exit code when process is killed by SIGKILL (e.g. OOM killer)
+_SIGKILL_EXIT = -(signal.SIGKILL) if hasattr(signal, "SIGKILL") else -9
+_SIGKILL_EXIT_ALT = 128 + 9  # 137, some systems report this
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -47,6 +52,19 @@ logger = logging.getLogger(__name__)
 # Progress file lives next to query results (per-dataset)
 PROGRESS_FILENAME = "pipeline_progress.json"
 SAME_MISSION_PAIRS_FILENAME = "same_mission_pairs.json"
+
+
+def _log_sigkill_hint(exc: subprocess.CalledProcessError) -> None:
+    """If the subprocess died with SIGKILL, log a clear OOM/tmux hint."""
+    r = getattr(exc, "returncode", None)
+    if r is None:
+        return
+    if r == _SIGKILL_EXIT or r == _SIGKILL_EXIT_ALT:
+        logger.error(
+            "Process was killed with SIGKILL (signal 9). This is usually the Linux "
+            "OOM killer. Check: dmesg | tail -30 (look for 'Out of memory' / 'oom-killer'). "
+            "Try smaller --chunk-size in the config or run with more RAM/swap."
+        )
 
 
 def progress_path(config: PipelineConfig) -> Path:
@@ -216,6 +234,7 @@ def run_query_stage(
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Query stage failed: {e}")
+        _log_sigkill_hint(e)
         return False
 
 
@@ -259,6 +278,7 @@ def run_filter_stage(
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Filter stage failed: {e}")
+        _log_sigkill_hint(e)
         return False
 
 
@@ -321,6 +341,7 @@ def run_download_stage(
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Download stage failed: {e}")
+        _log_sigkill_hint(e)
         return False
 
 
@@ -373,6 +394,7 @@ def run_organize_stage(
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Organize stage failed: {e}")
+        _log_sigkill_hint(e)
         return False
 
 
@@ -425,6 +447,7 @@ def run_differencing_stage(
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Differencing stage failed: {e}")
+        _log_sigkill_hint(e)
         return False
 
 

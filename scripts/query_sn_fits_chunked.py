@@ -75,33 +75,40 @@ def save_chunk(chunk_file: Path, results: list[dict[str, Any]]):
     logger.info(f"Saved chunk: {chunk_file} ({len(results)} entries)")
 
 
-def combine_chunks(chunk_files: list[Path], output_file: Path):
-    """Combine all chunk files into a single output file."""
+def combine_chunks(chunk_files: list[Path], output_file: Path) -> None:
+    """Combine all chunk files into a single output file.
+
+    Writes the combined JSON array by streaming one chunk at a time so we never
+    hold all chunk data in memory (avoids OOM on large full-catalog runs).
+    """
     logger.info(f"Combining {len(chunk_files)} chunks into {output_file}")
 
-    all_results = []
-    for chunk_file in sorted(chunk_files):
-        if not chunk_file.exists():
-            logger.warning(f"Chunk file not found: {chunk_file}")
-            continue
-
-        try:
-            with open(chunk_file) as f:
-                chunk_data = json.load(f)
-                all_results.extend(chunk_data)
-                logger.info(
-                    f"  Loaded {len(chunk_data)} entries from {chunk_file.name}"
-                )
-        except Exception as e:
-            logger.error(f"Error loading chunk {chunk_file}: {e}")
-            continue
-
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_file, "w") as f:
-        json.dump(all_results, f, indent=2, default=str)
+    total = 0
+    first = True
+    with open(output_file, "w") as out:
+        out.write("[\n")
+        for chunk_file in sorted(chunk_files):
+            if not chunk_file.exists():
+                logger.warning(f"Chunk file not found: {chunk_file}")
+                continue
+            try:
+                with open(chunk_file) as f:
+                    chunk_data = json.load(f)
+                for i, item in enumerate(chunk_data):
+                    if not first:
+                        out.write(",\n")
+                    out.write("  ")
+                    out.write(json.dumps(item, indent=2, default=str).replace("\n", "\n  "))
+                    first = False
+                total += len(chunk_data)
+                logger.info(f"  Loaded {len(chunk_data)} entries from {chunk_file.name}")
+            except Exception as e:
+                logger.error(f"Error loading chunk {chunk_file}: {e}")
+                continue
+        out.write("\n]\n")
 
-    logger.info(f"Combined {len(all_results)} total entries into {output_file}")
-    return all_results
+    logger.info(f"Combined {total} total entries into {output_file}")
 
 
 async def process_chunk(
@@ -129,35 +136,38 @@ async def process_chunk(
         f"{'='*60}"
     )
 
-    # Check if chunk file already exists with data
+    # Load existing chunk data if present (for resume)
     chunk_file = chunk_dir / f"chunk_{chunk_num:03d}.json"
     existing_chunk_data = []
     if chunk_file.exists() and not reset_checkpoint:
         try:
             with open(chunk_file) as f:
                 existing_chunk_data = json.load(f)
-            if existing_chunk_data and len(existing_chunk_data) > 0:
-                logger.info(
-                    f"Chunk {chunk_num + 1} already has {len(existing_chunk_data)} entries, skipping"
-                )
-                return chunk_file
         except Exception as e:
             logger.warning(f"Could not read existing chunk file: {e}")
 
-    # Load checkpoint to skip already processed
-    processed = load_checkpoint(checkpoint_file, reset=reset_checkpoint)
+    # Only skip entire chunk if it is complete (all entries already saved)
+    if existing_chunk_data and len(existing_chunk_data) >= len(chunk_entries):
+        logger.info(
+            f"Chunk {chunk_num + 1} already complete ({len(existing_chunk_data)} entries), skipping"
+        )
+        return chunk_file
 
-    results = []
+    # Start with existing results so we don't lose data on resume
+    results = list(existing_chunk_data)
+    results_by_sn = {r["sn_name"]: r for r in results}
+
+    # Load checkpoint and ensure processed set includes everyone we already have in chunk
+    processed = load_checkpoint(checkpoint_file, reset=reset_checkpoint)
+    for sn in results_by_sn:
+        processed.add(sn)
+
     for i, entry in enumerate(chunk_entries, start=start_idx + 1):
         sn_name = entry["sn_name"]
 
-        # Skip if already processed (only if we have valid chunk data)
-        if (
-            sn_name in processed
-            and existing_chunk_data
-            and len(existing_chunk_data) > 0
-        ):
-            logger.info(f"[{i}/{len(entries)}] Skipping {sn_name} (already processed)")
+        # Skip if we already have this SN in our chunk (resume)
+        if sn_name in results_by_sn:
+            logger.info(f"[{i}/{len(entries)}] Skipping {sn_name} (already in chunk)")
             continue
 
         logger.info(f"\n[{i}/{len(entries)}] Processing {sn_name}")
@@ -172,10 +182,12 @@ async def process_chunk(
                 disable_time_filter=disable_time_filter,
             )
             results.append(result)
+            results_by_sn[sn_name] = result
             processed.add(sn_name)
 
-            # Save checkpoint after each entry
+            # Save checkpoint and chunk after each entry (so kills don't lose data)
             save_checkpoint(checkpoint_file, processed)
+            save_chunk(chunk_file, results)
 
             # Brief summary
             ref_count = len(result["reference_observations"])
@@ -183,31 +195,28 @@ async def process_chunk(
             logger.info(
                 f"{sn_name}: {ref_count} reference, {sci_count} science observations"
             )
-            
+
             # Clean up memory after each query to prevent accumulation
-            if i % 10 == 0:  # Every 10 supernovae
+            if len(results) % 10 == 0:
                 gc.collect()
-                logger.debug(f"Ran garbage collection after {i} supernovae")
+                logger.debug(f"Ran garbage collection after {len(results)} supernovae")
         except Exception as e:
             logger.error(f"Error processing {sn_name}: {e}")
             # Still save a result entry with error
-            results.append(
-                {
-                    "sn_name": sn_name,
-                    "ra_deg": entry.get("ra_deg"),
-                    "dec_deg": entry.get("dec_deg"),
-                    "discovery_date": str(entry.get("discovery_date", "")),
-                    "reference_observations": [],
-                    "science_observations": [],
-                    "errors": [str(e)],
-                }
-            )
+            error_result = {
+                "sn_name": sn_name,
+                "ra_deg": entry.get("ra_deg"),
+                "dec_deg": entry.get("dec_deg"),
+                "discovery_date": str(entry.get("discovery_date", "")),
+                "reference_observations": [],
+                "science_observations": [],
+                "errors": [str(e)],
+            }
+            results.append(error_result)
+            results_by_sn[sn_name] = error_result
             processed.add(sn_name)
             save_checkpoint(checkpoint_file, processed)
-
-    # Save chunk
-    chunk_file = chunk_dir / f"chunk_{chunk_num:03d}.json"
-    save_chunk(chunk_file, results)
+            save_chunk(chunk_file, results)
 
     return chunk_file
 
@@ -309,6 +318,11 @@ async def main():
         action="store_true",
         help="Clear checkpoint and start fresh (ignores existing checkpoint)",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from checkpoint (default when checkpoint exists; use to make intent explicit)",
+    )
 
     args = parser.parse_args()
 
@@ -401,7 +415,7 @@ async def main():
             except Exception:
                 pass
 
-    # Process chunks
+    # Process chunks; combine after each chunk so partial runs still produce output
     chunk_files = []
     for chunk_num in range(num_chunks):
         chunk_file = await process_chunk(
@@ -418,9 +432,17 @@ async def main():
             args.reset_checkpoint,
         )
         chunk_files.append(chunk_file)
+        # Update combined output after each chunk (so kills/hangs don't lose everything)
+        combine_chunks(chunk_files, args.output)
 
-    # Combine all chunks
-    all_results = combine_chunks(chunk_files, args.output)
+    # Load combined results for summary (already written by last combine_chunks)
+    all_results = []
+    if args.output.exists():
+        try:
+            with open(args.output) as f:
+                all_results = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load combined output for summary: {e}")
 
     # Print summary
     total_ref = sum(len(r["reference_observations"]) for r in all_results)

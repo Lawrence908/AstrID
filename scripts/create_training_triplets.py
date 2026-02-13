@@ -33,14 +33,23 @@ import argparse
 import json
 import logging
 import random
+import sys
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Project root on path so "src" resolves when run as script
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
+
+# Astropy fills in missing FITS time keywords (DATEREF, MJD-OBS, etc.); harmless for WCS alignment
+warnings.filterwarnings("ignore", category=FITSFixedWarning)
 
 from src.utils.fits_loader import load_fits_with_wcs
 
@@ -50,6 +59,72 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _parse_ra_dec_to_skycoord(ra_str: str, dec_str: str) -> SkyCoord | None:
+    """Convert catalog RA/Dec strings (e.g. '09 55 42.15', '+69 40 25.9') to SkyCoord."""
+    ra_str = (ra_str or "").strip()
+    dec_str = (dec_str or "").strip()
+    if not ra_str or not dec_str:
+        return None
+    # RA: "09 55 42.15" -> "09h55m42.15s"
+    ra_parts = ra_str.split()
+    if len(ra_parts) != 3:
+        return None
+    ra_sky = f"{ra_parts[0]}h{ra_parts[1]}m{ra_parts[2]}s"
+    # Dec: "+69 40 25.9" or "- 8 49 37.0" -> "+69d40m25.9s" or "-08d49m37.0s"
+    dec_parts = dec_str.split()
+    if len(dec_parts) == 4 and dec_parts[0] in ("+", "-"):
+        sign, d, m, s = dec_parts[0], dec_parts[1], dec_parts[2], dec_parts[3]
+        dec_sky = f"{sign}{d}d{m}m{s}s"
+    elif len(dec_parts) == 3:
+        dec_sky = f"{dec_parts[0]}d{dec_parts[1]}m{dec_parts[2]}s"
+    else:
+        return None
+    try:
+        return SkyCoord(ra_sky, dec_sky, frame="icrs")
+    except Exception:
+        return None
+
+
+def load_sn_catalog(catalog_path: Path) -> dict[str, SkyCoord]:
+    """
+    Load SN catalog from pipe-separated file (e.g. sncat_compiled.txt).
+    Returns dict mapping sn_name (stripped) -> SkyCoord(ra, dec).
+    """
+    out: dict[str, SkyCoord] = {}
+    if not catalog_path.exists():
+        logger.warning(f"SN catalog not found: {catalog_path}")
+        return out
+    try:
+        with open(catalog_path, encoding="utf-8", errors="replace") as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
+    except Exception as e:
+        logger.warning(f"Could not read SN catalog {catalog_path}: {e}")
+        return out
+    if len(lines) < 2:
+        return out
+    # Header: pipe-separated column names
+    header = [c.strip() for c in lines[0].split("|")]
+    try:
+        idx_name = header.index("sn_name")
+        idx_ra = header.index("sn_ra")
+        idx_dec = header.index("sn_dec")
+    except ValueError:
+        logger.warning("SN catalog missing sn_name, sn_ra, or sn_dec columns")
+        return out
+    for line in lines[1:]:
+        parts = [p.strip() for p in line.split("|")]
+        if max(idx_name, idx_ra, idx_dec) >= len(parts):
+            continue
+        name = parts[idx_name].strip()
+        if not name:
+            continue
+        coord = _parse_ra_dec_to_skycoord(parts[idx_ra], parts[idx_dec])
+        if coord is not None:
+            out[name] = coord
+    logger.info(f"Loaded {len(out)} SN coordinates from {catalog_path}")
+    return out
 
 
 @dataclass
@@ -348,6 +423,7 @@ def process_sn(
     cutout_size: int,
     bogus_ratio: float,
     augment: bool,
+    sn_catalog: dict[str, SkyCoord] | None = None,
 ) -> list[ImageTriplet]:
     """Process a single supernova to generate training triplets."""
     triplets = []
@@ -373,36 +449,52 @@ def process_sn(
         mission = parts[-3]
         filter_name = parts[-2]
 
-        # Load difference image to get SN position
+        # Load difference image
         diff_data, diff_header = load_fits_data(diff_file)
         if diff_data is None:
             continue
 
-        # Get SN pixel position from header
+        sn_fits_dir = fits_dir / sn_name
+        ref_files = list(sn_fits_dir.glob(f"reference/{mission}_*{filter_name}*.fits"))
+        sci_files = list(sn_fits_dir.glob(f"science/{mission}_*{filter_name}*.fits"))
+        if not ref_files or not sci_files:
+            logger.warning(f"Missing ref/sci files for {sn_name} {mission} {filter_name}")
+            continue
+        ref_path = ref_files[0]
+        sci_path = sci_files[0]
+
         sn_x = diff_header.get("SN_X")
         sn_y = diff_header.get("SN_Y")
 
         if sn_x is None or sn_y is None:
-            # Use image center as fallback
-            logger.warning(
-                f"No SN position in header for {sn_name}, using image center"
-            )
-            sn_x = diff_data.shape[1] / 2
-            sn_y = diff_data.shape[0] / 2
-
-        # Find corresponding reference and science images
-        # Files are named like: SWIFT_sw00032503001uuu_sk.fits
-        # Filter name is embedded in the observation ID
-        sn_fits_dir = fits_dir / sn_name
-        ref_files = list(sn_fits_dir.glob(f"reference/{mission}_*{filter_name}*.fits"))
-        sci_files = list(sn_fits_dir.glob(f"science/{mission}_*{filter_name}*.fits"))
-
-        if not ref_files or not sci_files:
-            logger.warning(f"Missing ref/sci files for {sn_name} {mission} {filter_name}")
-            continue
-
-        ref_path = ref_files[0]
-        sci_path = sci_files[0]
+            if sn_catalog and sn_name in sn_catalog:
+                try:
+                    _, _, ref_wcs = load_fits_with_wcs(
+                        ref_path, verify_wcs=False, memmap=False, return_dict_header=False
+                    )
+                    if ref_wcs is not None and ref_wcs.has_celestial:
+                        coord = sn_catalog[sn_name]
+                        x, y = ref_wcs.world_to_pixel(coord)
+                        h, w = diff_data.shape
+                        if 0 <= float(x) < w and 0 <= float(y) < h:
+                            sn_x = float(x)
+                            sn_y = float(y)
+                            logger.info("  SN position for %s from catalog: (%.1f, %.1f)", sn_name, sn_x, sn_y)
+                        else:
+                            logger.warning("Catalog position for %s outside image bounds, using center", sn_name)
+                            sn_x = diff_data.shape[1] / 2
+                            sn_y = diff_data.shape[0] / 2
+                    else:
+                        sn_x = diff_data.shape[1] / 2
+                        sn_y = diff_data.shape[0] / 2
+                except Exception as e:
+                    logger.warning("Catalog WCS conversion failed for %s: %s, using center", sn_name, e)
+                    sn_x = diff_data.shape[1] / 2
+                    sn_y = diff_data.shape[0] / 2
+            else:
+                logger.warning("No SN position in header for %s, using image center", sn_name)
+                sn_x = diff_data.shape[1] / 2
+                sn_y = diff_data.shape[0] / 2
 
         # Create REAL sample at SN position
         real_triplet = create_triplet(
@@ -707,6 +799,13 @@ def main() -> None:
         action="store_true",
         help="Create PNG visualizations of all triplets",
     )
+    default_catalog = Path(__file__).resolve().parent.parent / "resources" / "sncat_compiled.txt"
+    parser.add_argument(
+        "--sn-catalog",
+        type=Path,
+        default=None,
+        help="Path to SN catalog with sn_name, sn_ra, sn_dec columns (default: resources/sncat_compiled.txt if present)",
+    )
 
     args = parser.parse_args()
 
@@ -718,7 +817,10 @@ def main() -> None:
         logger.error(f"Difference directory does not exist: {args.diff_dir}")
         return
 
-    logger.info(f"Processing triplets from:")
+    catalog_path = args.sn_catalog or default_catalog
+    sn_catalog = load_sn_catalog(catalog_path) if catalog_path else {}
+
+    logger.info("Processing triplets from:")
     logger.info(f"  FITS: {args.fits_dir}")
     logger.info(f"  Diff: {args.diff_dir}")
     logger.info(f"  Output: {args.output_dir}")
@@ -751,6 +853,7 @@ def main() -> None:
                 cutout_size=args.cutout_size,
                 bogus_ratio=args.bogus_ratio,
                 augment=args.augment,
+                sn_catalog=sn_catalog,
             )
 
             if triplets:
