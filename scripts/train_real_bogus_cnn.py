@@ -55,7 +55,14 @@ def load_triplets(triplet_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     bogus = np.load(bogus_path)
     images = np.concatenate([real["images"], bogus["images"]], axis=0)
     labels = np.concatenate([real["labels"], bogus["labels"]], axis=0)
-    return images.astype(np.float32), labels.astype(np.int64)
+    images = images.astype(np.float32)
+    labels = labels.astype(np.int64)
+    # Replace NaN/Inf so training doesn't blow up (e.g. best_yield has NaNs in cutouts)
+    nan_count = int(np.isnan(images).sum())
+    if nan_count > 0:
+        logger.warning("Replacing %d NaN/Inf values in images with 0", nan_count + int(np.isinf(images).sum()))
+        images = np.nan_to_num(images, nan=0.0, posinf=0.0, neginf=0.0)
+    return images, labels
 
 
 class TripletDataset(Dataset):

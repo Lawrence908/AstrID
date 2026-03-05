@@ -190,6 +190,76 @@ def normalize_image(image: np.ndarray, clip_percentile: float = 99.5) -> np.ndar
     return normalized.astype(np.float32)
 
 
+def is_usable_cutout(
+    arr: np.ndarray,
+    min_std: float = 0.02,
+    black_threshold: float = 0.05,
+    max_black_frac: float = 0.4,
+    center_window: int = 11,
+    max_center_black_frac: float = 0.5,
+    max_linear_gradient_ratio: float = 2.0,
+) -> bool:
+    """Return False if the cutout has no usable variation or has bad data (black void, center in void, shade bands).
+
+    Rejects:
+    - No variation (std < min_std): all white, all black, or constant.
+    - Large no-data region: fraction of pixels below black_threshold > max_black_frac.
+    - Center in void: too many black pixels in the center window (crosshairs over no-data).
+    - Shade/band artifacts: strong linear gradient (plane fit range >> std) suggesting non-astronomical bands.
+    """
+    if arr is None or arr.size == 0:
+        return False
+    valid = np.isfinite(arr)
+    if not np.any(valid):
+        return False
+    std = np.nanstd(arr)
+    if std < min_std:
+        return False
+
+    h, w = arr.shape
+    # Pixels that are "black" (no data) in normalized [0,1] image
+    black_mask = arr < black_threshold
+    black_frac = np.sum(black_mask & valid) / max(np.sum(valid), 1)
+    if black_frac > max_black_frac:
+        return False
+
+    # Center region (where crosshairs are): reject if center is in the void
+    half = center_window // 2
+    cy, cx = h // 2, w // 2
+    r0, r1 = max(0, cy - half), min(h, cy + half + 1)
+    c0, c1 = max(0, cx - half), min(w, cx + half + 1)
+    center_region = arr[r0:r1, c0:c1]
+    center_valid = np.isfinite(center_region)
+    if np.any(center_valid):
+        center_black_frac = np.sum(center_region < black_threshold) / max(np.sum(center_valid), 1)
+        if center_black_frac > max_center_black_frac:
+            return False
+
+    # Strong linear gradient (shade bands): fit plane; if range >> std, reject
+    if max_linear_gradient_ratio > 0 and std > 1e-9:
+        rows = np.arange(h, dtype=float)
+        cols = np.arange(w, dtype=float)
+        rr, cc = np.meshgrid(rows, cols, indexing="ij")
+        r_flat = rr.ravel()
+        c_flat = cc.ravel()
+        v_flat = arr.ravel()
+        fin = np.isfinite(v_flat)
+        if np.sum(fin) >= 10:
+            X = np.column_stack([r_flat[fin], c_flat[fin], np.ones(np.sum(fin))])
+            y = v_flat[fin]
+            try:
+                coeffs, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
+                a, b, c0 = coeffs
+                plane = a * rr + b * cc + c0
+                plane_range = float(np.nanmax(plane) - np.nanmin(plane))
+                if plane_range > max_linear_gradient_ratio * std:
+                    return False
+            except Exception:
+                pass
+
+    return True
+
+
 def ref_pixel_to_science_pixel(
     ref_x: float,
     ref_y: float,
@@ -301,6 +371,8 @@ def create_triplet(
     center_y: float,
     cutout_size: int,
     label: int,
+    *,
+    skip_quality_check: bool = False,
 ) -> ImageTriplet | None:
     """Create a single training triplet from FITS files.
 
@@ -336,6 +408,12 @@ def create_triplet(
     ref_norm = normalize_image(ref_cutout)
     sci_norm = normalize_image(sci_cutout)
     diff_norm = normalize_image(diff_cutout)
+
+    # Reject triplets where reference or science fails quality checks (unless disabled)
+    if not skip_quality_check and (
+        not is_usable_cutout(ref_norm) or not is_usable_cutout(sci_norm)
+    ):
+        return None
 
     # Create metadata
     metadata = {
@@ -424,6 +502,8 @@ def process_sn(
     bogus_ratio: float,
     augment: bool,
     sn_catalog: dict[str, SkyCoord] | None = None,
+    *,
+    skip_quality_check: bool = False,
 ) -> list[ImageTriplet]:
     """Process a single supernova to generate training triplets."""
     triplets = []
@@ -508,6 +588,7 @@ def process_sn(
             center_y=sn_y,
             cutout_size=cutout_size,
             label=1,  # Real
+            skip_quality_check=skip_quality_check,
         )
 
         if real_triplet:
@@ -537,6 +618,7 @@ def process_sn(
                 center_y=by,
                 cutout_size=cutout_size,
                 label=0,  # Bogus
+                skip_quality_check=skip_quality_check,
             )
 
             if bogus_triplet:
@@ -806,6 +888,11 @@ def main() -> None:
         default=None,
         help="Path to SN catalog with sn_name, sn_ra, sn_dec columns (default: resources/sncat_compiled.txt if present)",
     )
+    parser.add_argument(
+        "--no-quality-filter",
+        action="store_true",
+        help="Skip is_usable_cutout checks (include all triplets for hand-curation or comparison)",
+    )
 
     args = parser.parse_args()
 
@@ -827,6 +914,7 @@ def main() -> None:
     logger.info(f"  Cutout size: {args.cutout_size}x{args.cutout_size}")
     logger.info(f"  Bogus ratio: {args.bogus_ratio}")
     logger.info(f"  Augmentation: {args.augment}")
+    logger.info(f"  Quality filter: %s", "disabled (--no-quality-filter)" if args.no_quality_filter else "enabled")
 
     # Find all SNe to process
     if args.sn:
@@ -854,6 +942,7 @@ def main() -> None:
                 bogus_ratio=args.bogus_ratio,
                 augment=args.augment,
                 sn_catalog=sn_catalog,
+                skip_quality_check=args.no_quality_filter,
             )
 
             if triplets:

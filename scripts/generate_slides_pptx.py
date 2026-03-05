@@ -401,8 +401,16 @@ def build_presentation():
         "Result: 93.6%–100% overlap on processed pairs",
     ], notes="Arguably the most critical step. Sub-pixel accuracy is essential — even tiny offsets create bright artifacts.")
 
+    # ── Slide 15b: WCS Alignment — Recent Fix ──
+    make_content_slide(prs, 16, "WCS Misalignment: Reverting to a Simpler Approach", [
+        "Initially struggled with WCS misalignment: crosshairs in triplets were off, sigma values wrong",
+        "Reverted to a simpler, proven method from a previous project",
+        "Fix: one shared FITS loader + consistent use of the header WCS for ref and science",
+        "Sky→pixel conversion is now reliable everywhere; crosshairs and metrics align correctly",
+    ], notes="When visualizations showed crosshairs and sigma off, the issue was inconsistent WCS handling. Going back to a simpler approach from another project fixed it.")
+
     # ── Slide 16: PSF Matching ──
-    make_content_slide(prs, 16, "PSF Matching & Background Subtraction", [
+    make_content_slide(prs, 17, "PSF Matching & Background Subtraction", [
         "Background subtraction: remove varying sky levels",
         "  Uses photutils.Background2D with median estimator (50–64 px boxes)",
         "PSF estimation: measure FWHM from bright stars",
@@ -413,7 +421,7 @@ def build_presentation():
     ], notes="The PSF is the telescope's fingerprint. Different observations have different seeing. Match them so stars cancel cleanly.")
 
     # ── Slide 17: Significance Maps ──
-    make_content_slide(prs, 17, "Significance Maps & Source Detection", [
+    make_content_slide(prs, 18, "Significance Maps & Source Detection", [
         "Significance map: each pixel = signal-to-noise ratio",
         "  Value = difference / combined_noise",
         "Enables consistent thresholding across images with different noise",
@@ -427,7 +435,7 @@ def build_presentation():
     make_section_slide(prs, "Results", "What has the pipeline found?")
 
     # ── Slide 18: SN 2014J ──
-    make_content_slide(prs, 18, "Detection: SN 2014J (2120σ)", [
+    make_content_slide(prs, 19, "Detection: SN 2014J (2120σ)", [
         "SN 2014J: brightest supernova in decades (galaxy M82)",
         "Detected at 2120σ significance — unmistakable signal",
         "SWIFT UVOT U-band filter",
@@ -437,7 +445,7 @@ def build_presentation():
     ], notes="Our best example. 2120 times above noise. But even here, 72 other false detections.")
 
     # ── Slide 19: Batch Results ──
-    make_content_slide(prs, 19, "Batch Processing: 5 Supernovae", [
+    make_content_slide(prs, 20, "Batch Processing: 5 Supernovae", [
         "5 SNe fully processed: 2014J, 2014ai, 2014bh, 2014bi, 2014cs",
         "All SWIFT UVOT U-band (uuu filter)",
         "Max significance range: 412σ to 2120σ",
@@ -447,7 +455,7 @@ def build_presentation():
     ], notes="Consistent results across multiple targets. Wide range in detection counts shows how variable the false positive problem is.")
 
     # ── Slide 20: Production Dataset ──
-    make_content_slide(prs, 20, "Production Dataset Statistics", [
+    make_content_slide(prs, 21, "Production Dataset Statistics", [
         "222 complete supernova pairs (reference + science)",
         "2,282 FITS files total (1,170 reference, 1,112 science)",
         "Mission breakdown:",
@@ -459,7 +467,7 @@ def build_presentation():
     ], notes="Solid foundation. 222 pairs gives enough to start training. High success rate proves pipeline reliability.")
 
     # ── Slide 21: False Positive Problem ──
-    make_content_slide(prs, 21, "The False Positive Problem", [
+    make_content_slide(prs, 22, "The False Positive Problem", [
         "5σ threshold: 73–629 candidates, only ~1 real per image",
         "False positive sources:",
         "  • Cosmic rays (sharp single-pixel spikes)",
@@ -474,7 +482,7 @@ def build_presentation():
     make_section_slide(prs, "ML Preparation", "From detection to classification")
 
     # ── Slide 22: Training Triplets ──
-    make_content_slide(prs, 22, "Image Triplets for CNN Input", [
+    make_content_slide(prs, 23, "Image Triplets for CNN Input", [
         "Triplet = 63×63 pixel cutout of (science, reference, difference)",
         "3-channel input — analogous to RGB for a standard CNN",
         "Labels: Real (1) = known SN position; Bogus (0) = artifacts",
@@ -484,7 +492,7 @@ def build_presentation():
     ], notes="This bridges classical detection and ML. Small stamps around each detection. 57 samples prove it works; need thousands for real training.")
 
     # ── Slide 23: Config System ──
-    make_content_slide(prs, 23, "Configuration-Driven Reproducibility", [
+    make_content_slide(prs, 24, "Configuration-Driven Reproducibility", [
         "All pipeline runs driven by YAML configuration files",
         "15 configs for different missions, filters, temporal windows",
         "Two execution modes:",
@@ -495,7 +503,7 @@ def build_presentation():
     ], notes="Reproducibility is central. Every dataset can be recreated. Modular design lets us test stages independently.")
 
     # ── Slide 24: Training Strategy ──
-    make_content_slide(prs, 24, "Mission-Specific Training Strategy", [
+    make_content_slide(prs, 25, "Mission-Specific Training Strategy", [
         "Config system enables sophisticated experiments:",
         "  1. Train separate models per mission (SWIFT, GALEX, PS1)",
         "  2. Train combined model for generalization",
@@ -506,7 +514,7 @@ def build_presentation():
     ], notes="Modular configs enable real scientific experiments. Train on one telescope, test on another — proves the model learned physics, not artifacts.")
 
     # ── Slide 25: Literature Alignment ──
-    make_content_slide(prs, 25, "Alignment with Published Research",
+    make_content_slide(prs, 26, "Alignment with Published Research",
         bullets=[],
         two_column=True,
         col1_title="Implemented (Phases 1–4)",
@@ -531,17 +539,19 @@ def build_presentation():
     make_section_slide(prs, "Lessons & Next Steps", "What we learned and where we're going")
 
     # ── Slide 26: Lessons Learned ──
-    make_content_slide(prs, 26, "Key Lessons from the First Half", [
+    make_content_slide(prs, 27, "Key Lessons from the First Half", [
         "Data quality > model complexity — better preprocessing beat fancier models",
         "Discover constraints early — same-mission requirement reshaped everything",
         "Small details matter — compressed FITS → 296% more training pairs",
         "Invest in infrastructure — modular design + configs accelerated all later work",
         "Research is non-linear — progress came from revisiting assumptions",
         "Debugging ML ≠ debugging software — emergent behavior from data-parameter interactions",
+        "WCS alignment: when crosshairs and sigma were wrong, reverting to a simpler WCS-from-header approach from a prior project fixed it",
+        "Pipeline progress/resume: long runs made WCS iteration painful — added pipeline_progress.json so next run skips completed SNe and only processes the remainder",
     ], notes="These lessons are as important as results. Biggest gains came from understanding data better, not fancier algorithms.")
 
     # ── Slide 27: Next Steps - Scale ──
-    make_content_slide(prs, 27, "Next: Scale the Dataset", [
+    make_content_slide(prs, 28, "Next: Scale the Dataset", [
         "Current: 5 fully processed SNe, 57 triplet samples",
         "Target: 200+ difference image sets with quality filtering",
         "Enforce minimum 85% overlap threshold",
@@ -551,7 +561,7 @@ def build_presentation():
     ], notes="Immediate priority: scaling up. We have the pipeline — now run it at scale. 200+ difference images for meaningful ML training.")
 
     # ── Slide 28: Next Steps - CNN ──
-    make_content_slide(prs, 28, "Next: CNN Classifier",
+    make_content_slide(prs, 29, "Next: CNN Classifier",
         bullets=[],
         two_column=True,
         col1_title="Phase B: Triplets at Scale",
@@ -573,7 +583,7 @@ def build_presentation():
         notes="Generate triplets, then train a CNN. Architecture is well-established. Challenge is quality training data.")
 
     # ── Slide 29: Next Steps - Training ──
-    make_content_slide(prs, 29, "Next: Training & Evaluation", [
+    make_content_slide(prs, 30, "Next: Training & Evaluation", [
         "Temporal/spatial splits to avoid data leakage",
         "Class imbalance handling: weighted loss or oversampling",
         "Metrics: precision, recall, F1, AUCPR — not accuracy",
@@ -582,7 +592,7 @@ def build_presentation():
     ], notes="Evaluation is where science meets engineering. Right metrics, right splits, right threshold.")
 
     # ── Slide 30: Timeline ──
-    make_content_slide(prs, 30, "Remaining Timeline", [
+    make_content_slide(prs, 31, "Remaining Timeline", [
         "Feb–Mar 2026: Scale differencing to 200+ pairs; generate triplets",
         "Mar–Apr 2026: Implement and train CNN classifier; evaluate with AUCPR",
         "Apr 2026: Cross-mission validation experiments",
@@ -593,7 +603,7 @@ def build_presentation():
     ], notes="Clear roadmap. Hardest part (understanding data, building pipeline) is done. Remaining work is primarily ML.")
 
     # ── Slide 31: Conclusion ──
-    make_content_slide(prs, 31, "Summary & Key Takeaways", [
+    make_content_slide(prs, 32, "Summary & Key Takeaways", [
         "Built a production-ready 5-stage pipeline from scratch",
         "Discovered critical constraints through experimentation",
         "Implemented 9-stage differencing pipeline — detections at 412σ–2120σ",
