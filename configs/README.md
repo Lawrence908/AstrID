@@ -12,6 +12,15 @@ This directory contains YAML configuration files for generating mission-specific
 - Time range: 2005-2011 (GALEX golden era)
 - Use case: **Best config for building a large training set**
 - Why: All three missions operational, maximizes usable pairs
+- Often enough for a "large" dataset; use `full_catalog.yaml` if you need the absolute maximum in one run.
+
+#### `full_catalog.yaml` — Run everything
+**Entire catalog, all MAST missions**
+- Missions: TESS, GALEX, PS1, SWIFT, HST
+- Time range: 2000–present (no max year)
+- Use case: Single pipeline run for the largest possible dataset
+- Why: No year or index limits; one config to "run all of them"
+- Note: Longer query/download; use `--resume` to continue after interruptions.
 
 #### `galex_golden_era.yaml` ⭐ BEST FOR UV PAIRS
 **GALEX when it was fully operational**

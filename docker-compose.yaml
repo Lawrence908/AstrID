@@ -1,3 +1,9 @@
+# Development compose file for AstrID development environment.
+# Usage:
+#   docker compose -f docker-compose.yaml pull
+#   docker compose -f docker-compose.yaml up -d
+
+
 services:
   # Using Supabase PostgreSQL (no local PostgreSQL container needed)
 
