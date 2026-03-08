@@ -637,6 +637,24 @@ For each supernova, the pipeline generates:
 - All pairs have >85% overlap (viable for training)
 - Significance maps show clear SN detections
 
+### Training triplets and cutout quality
+
+**Script**: `scripts/create_training_triplets.py`  
+**Inputs**: Stage 4 training directory (reference/science FITS) and Stage 5 difference images.  
+**Output**: `train_real.npz`, `train_bogus.npz` (stacked cutouts: reference, science, difference).
+
+Triplets are built by extracting cutouts at SN and bogus positions, then normalizing each channel. **Where to enforce usable data**: inside triplet creation, after cutouts are extracted and normalized and before a triplet is added to the list.
+
+**Cutout quality check (`is_usable_cutout`)**:
+- **Purpose**: Reject reference or science cutouts that are constant, mostly no-data (black void), have the crosshair over the void, or show strong shade-band/gradient artifacts.
+- **Place**: In `create_triplet()` in `create_training_triplets.py`, immediately after normalizing the reference and science cutouts. If either channel fails, return `None` and do not add the triplet.
+- **Criteria** (all must pass):
+  - **Variation**: `std(arr) >= min_std` (default 0.02) — reject constant / all white / all black.
+  - **Black fraction**: Fraction of pixels below `black_threshold` (0.05) must be ≤ `max_black_frac` (0.4) — reject cutouts with a large no-data (pure black) region.
+  - **Center not in void**: In a small center window (11×11), the fraction of black pixels must be ≤ `max_center_black_frac` (0.5) — reject when the crosshairs fall on missing data.
+  - **No strong linear gradient**: A plane is fitted to the image; if its range > `max_linear_gradient_ratio * std` (default 2.0), reject — removes shade-band / gradient artifacts.
+- **Filtering existing NPZ**: Use `scripts/filter_triplet_npz_quality.py` with the same logic; optional args `--max-black-frac`, `--max-center-black-frac`, `--max-linear-gradient-ratio` to tune.
+
 ---
 
 ## Auxiliary: Cleanup
