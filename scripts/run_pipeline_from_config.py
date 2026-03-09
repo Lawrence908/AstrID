@@ -435,6 +435,8 @@ def run_differencing_stage(
         cmd.append("--visualize")
     if kwargs.get("mission"):
         cmd.extend(["--mission", kwargs["mission"]])
+    if kwargs.get("all_filters", False):
+        cmd.append("--all-filters")
 
     logger.info(f"Command: {' '.join(cmd)}")
 
@@ -639,6 +641,11 @@ def main() -> None:
         help="Filter to specific mission in differencing stage",
     )
     parser.add_argument(
+        "--all-filters",
+        action="store_true",
+        help="Generate difference images for ALL matching filters per SN (not just preferred)",
+    )
+    parser.add_argument(
         "--no-skip-completed",
         action="store_true",
         help="Do not skip SNe already in pipeline_progress.json (reprocess all)",
@@ -709,6 +716,7 @@ def main() -> None:
             "decompress": args.decompress,
             "visualize": args.visualize,
             "mission": args.mission,
+            "all_filters": args.all_filters,
             "skip_completed": skip_completed,
             "triplets_cutout": args.triplets_cutout,
             "triplets_augment": args.triplets_augment,

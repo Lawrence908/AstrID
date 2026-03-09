@@ -47,6 +47,19 @@ MISSION_FILTERS = {
         "preferred": ["g", "r", "i", "z", "y"],
         "pattern": "PS1_*.fits*",
     },
+    "HST": {
+        "filters": [
+            "f225w", "f275w", "f336w", "f435w", "f450w", "f475w",
+            "f555w", "f606w", "f625w", "f775w", "f814w", "f850lp",
+            "f105w", "f110w", "f125w", "f140w", "f160w",
+            "f547m", "f656n", "fr680n",
+        ],
+        "preferred": [
+            "f606w", "f814w", "f555w", "f435w", "f475w", "f775w",
+            "f110w", "f160w",
+        ],
+        "pattern": "hst_*.fits",
+    },
 }
 
 
@@ -59,6 +72,8 @@ def detect_mission_from_filename(filename: str) -> str | None:
         return "GALEX"
     elif name.startswith("PS1_"):
         return "PS1"
+    elif name.startswith("HST_") or name.startswith("HLA_"):
+        return "HST"
     return None
 
 

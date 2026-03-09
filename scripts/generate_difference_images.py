@@ -130,6 +130,63 @@ def find_matching_filter_pair(
     return None
 
 
+def find_all_matching_filter_pairs(
+    sn_name: str, base_dir: Path
+) -> list[tuple[Path, Path, str, str]]:
+    """Return ALL (ref_path, sci_path, filter_name, mission) tuples with matching mission+filter.
+
+    Same grouping logic as find_matching_filter_pair but collects every common
+    mission and every common filter (one pair per filter, using first file in each list).
+    """
+    ref_dir = base_dir / sn_name / "reference"
+    sci_dir = base_dir / sn_name / "science"
+
+    if not ref_dir.exists() or not sci_dir.exists():
+        return []
+
+    ref_by_mission: dict[str, dict[str, list[Path]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    sci_by_mission: dict[str, dict[str, list[Path]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+
+    for f in ref_dir.glob("*.fits*"):
+        mission = detect_mission_from_filename(f.name)
+        if mission is None:
+            continue
+        config = MISSION_FILTERS.get(mission)
+        if config is None:
+            continue
+        for filt in config["filters"]:
+            if filt in f.name.lower():
+                ref_by_mission[mission][filt].append(f)
+                break
+
+    for f in sci_dir.glob("*.fits*"):
+        mission = detect_mission_from_filename(f.name)
+        if mission is None:
+            continue
+        config = MISSION_FILTERS.get(mission)
+        if config is None:
+            continue
+        for filt in config["filters"]:
+            if filt in f.name.lower():
+                sci_by_mission[mission][filt].append(f)
+                break
+
+    pairs: list[tuple[Path, Path, str, str]] = []
+    for mission in ref_by_mission.keys() & sci_by_mission.keys():
+        ref_filters = set(ref_by_mission[mission].keys())
+        sci_filters = set(sci_by_mission[mission].keys())
+        common_filters = ref_filters & sci_filters
+        for filt in common_filters:
+            ref_path = ref_by_mission[mission][filt][0]
+            sci_path = sci_by_mission[mission][filt][0]
+            pairs.append((ref_path, sci_path, filt, mission))
+    return pairs
+
+
 def get_same_mission_sne(manifest_path: Path) -> list[str]:
     """Get list of SNe with same-mission pairs from the training manifest."""
     if not manifest_path.exists():
@@ -215,7 +272,7 @@ def main():
         "--mission",
         type=str,
         default=None,
-        choices=["SWIFT", "GALEX", "PS1"],
+        choices=["SWIFT", "GALEX", "PS1", "HST"],
         help="Filter to specific mission (default: all missions)",
     )
     parser.add_argument(
@@ -235,6 +292,11 @@ def main():
         action="store_false",
         dest="verify_wcs",
         help="Do not skip pairs with invalid WCS",
+    )
+    parser.add_argument(
+        "--all-filters",
+        action="store_true",
+        help="Generate pairs for ALL matching filters per SN (not just preferred)",
     )
 
     args = parser.parse_args()
@@ -271,9 +333,14 @@ def main():
         if args.mission:
             filtered = []
             for sn_name in sne_to_process:
-                pair = find_matching_filter_pair(sn_name, input_dir)
-                if pair and pair[3] == args.mission:  # pair[3] is mission_name
-                    filtered.append(sn_name)
+                if args.all_filters:
+                    pairs = find_all_matching_filter_pairs(sn_name, input_dir)
+                    if any(p[3] == args.mission for p in pairs):
+                        filtered.append(sn_name)
+                else:
+                    pair = find_matching_filter_pair(sn_name, input_dir)
+                    if pair and pair[3] == args.mission:
+                        filtered.append(sn_name)
             sne_to_process = filtered
             logger.info(f"Filtered to {args.mission} mission: {len(sne_to_process)} SNe")
 
@@ -291,160 +358,171 @@ def main():
         logger.info(f"\n{'='*60}")
         logger.info(f"Processing {sn_name}")
 
-        pair = find_matching_filter_pair(sn_name, input_dir)
-        if pair is None:
-            logger.warning("  No matching filter pair found, skipping")
+        if args.all_filters:
+            pairs = find_all_matching_filter_pairs(sn_name, input_dir)
+        else:
+            single = find_matching_filter_pair(sn_name, input_dir)
+            pairs = [single] if single else []
+
+        if not pairs:
+            logger.warning("  No matching filter pair(s) found, skipping")
             continue
 
-        ref_path, sci_path, filter_name, mission_name = pair
-
-        if args.verify_wcs:
-            try:
-                load_fits_with_wcs(ref_path, verify_wcs=True, memmap=False)
-            except ValueError as e:
-                logger.warning(
-                    "  Skipping %s: reference has no valid celestial WCS: %s",
-                    sn_name,
-                    e,
-                )
-                continue
-            try:
-                load_fits_with_wcs(sci_path, verify_wcs=True, memmap=False)
-            except ValueError as e:
-                logger.warning(
-                    "  Skipping %s: science has no valid celestial WCS: %s",
-                    sn_name,
-                    e,
-                )
-                continue
-
-        try:
-            diff, sig, mask, result = pipeline.process(
-                ref_path=ref_path,
-                sci_path=sci_path,
-                sn_name=sn_name,
-                sn_coords=SN_COORDINATES.get(sn_name),
-                mission_name=mission_name,
-            )
-
-            # Create output directory for this SN
+        for ref_path, sci_path, filter_name, mission_name in pairs:
+            # Skip if output already exists (all-filters: avoid redoing work)
             sn_output_dir = output_dir / sn_name
-            sn_output_dir.mkdir(exist_ok=True)
-
-            # Save difference image
             diff_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_diff.fits"
-            hdu_diff = fits.PrimaryHDU(diff.astype(np.float32))
-            hdu_diff.header["SN_NAME"] = sn_name
-            hdu_diff.header["MISSION"] = mission_name
-            hdu_diff.header["FILTER"] = filter_name
-            hdu_diff.header["REF_DATE"] = result.ref_date
-            hdu_diff.header["SCI_DATE"] = result.sci_date
-            hdu_diff.header["OVERLAP"] = result.overlap_fraction
-            hdu_diff.header["SIG_MAX"] = result.sig_max
-            if result.sn_pixel:
-                hdu_diff.header["SN_X"] = result.sn_pixel[0]
-                hdu_diff.header["SN_Y"] = result.sn_pixel[1]
-            hdu_diff.writeto(diff_file, overwrite=True)
+            if args.all_filters and diff_file.exists():
+                logger.info("  Skipping %s (already exists)", diff_file.name)
+                continue
 
-            # Save significance map
-            sig_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_sig.fits"
-            hdu_sig = fits.PrimaryHDU(sig.astype(np.float32))
-            hdu_sig.header["SN_NAME"] = sn_name
-            hdu_sig.header["MISSION"] = mission_name
-            hdu_sig.header["FILTER"] = filter_name
-            hdu_sig.writeto(sig_file, overwrite=True)
-
-            # Save mask
-            mask_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_mask.fits"
-            hdu_mask = fits.PrimaryHDU(mask.astype(np.float32))
-            hdu_mask.header["SN_NAME"] = sn_name
-            hdu_mask.header["MISSION"] = mission_name
-            hdu_mask.header["FILTER"] = filter_name
-            hdu_mask.writeto(mask_file, overwrite=True)
-
-            # Update result with file paths
-            result.difference_file = str(diff_file.relative_to(output_dir))
-            result.significance_file = str(sig_file.relative_to(output_dir))
-            result.mask_file = str(mask_file.relative_to(output_dir))
-
-            results.append(asdict(result))
-
-            logger.info(f"  Saved: {diff_file.name}")
-
-            # Visualization
-            if args.visualize:
+            if args.verify_wcs:
                 try:
-                    import matplotlib
-                    matplotlib.use('Agg')  # Use non-interactive backend
-                    import matplotlib.pyplot as plt
-
-                    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-                    fig.suptitle(f"SN {sn_name} ({filter_name})")
-
-                    # Difference
-                    vmax = np.nanpercentile(np.abs(diff), 99)
-                    axes[0].imshow(
-                        diff, origin="lower", cmap="RdBu_r", vmin=-vmax, vmax=vmax
+                    load_fits_with_wcs(ref_path, verify_wcs=True, memmap=False)
+                except ValueError as e:
+                    logger.warning(
+                        "  Skipping %s: reference has no valid celestial WCS: %s",
+                        sn_name,
+                        e,
                     )
-                    axes[0].set_title("Difference")
-
-                    # Significance
-                    vmax_sig = min(np.nanpercentile(np.abs(sig), 99), 15)
-                    axes[1].imshow(
-                        sig,
-                        origin="lower",
-                        cmap="RdBu_r",
-                        vmin=-vmax_sig,
-                        vmax=vmax_sig,
+                    continue
+                try:
+                    load_fits_with_wcs(sci_path, verify_wcs=True, memmap=False)
+                except ValueError as e:
+                    logger.warning(
+                        "  Skipping %s: science has no valid celestial WCS: %s",
+                        sn_name,
+                        e,
                     )
-                    axes[1].set_title(f"Significance (max={result.sig_max:.1f}σ)")
+                    continue
 
-                    # Mask
-                    axes[2].imshow(mask, origin="lower", cmap="gray")
-                    axes[2].set_title("SN Mask")
+            try:
+                diff, sig, mask, result = pipeline.process(
+                    ref_path=ref_path,
+                    sci_path=sci_path,
+                    sn_name=sn_name,
+                    sn_coords=SN_COORDINATES.get(sn_name),
+                    mission_name=mission_name,
+                )
 
-                    # Mark SN position with gap-centered crosshair
-                    if result.sn_pixel:
-                        px, py = result.sn_pixel[0], result.sn_pixel[1]
-                        gap, arm, color, lw = 3, 10, "lime", 2
-                        for ax in axes[:3]:
-                            ax.plot([px - arm, px - gap], [py, py], color=color, lw=lw)
-                            ax.plot([px + gap, px + arm], [py, py], color=color, lw=lw)
-                            ax.plot([px, px], [py - arm, py - gap], color=color, lw=lw)
-                            ax.plot([px, px], [py + gap, py + arm], color=color, lw=lw)
+                # Create output directory for this SN
+                sn_output_dir = output_dir / sn_name
+                sn_output_dir.mkdir(exist_ok=True)
 
-                    # Histogram
-                    valid = sig[np.isfinite(sig)]
-                    axes[3].hist(
-                        valid.flatten(), bins=100, range=(-10, 10), density=True
-                    )
-                    axes[3].axvline(5, color="r", linestyle="--", label="5σ")
-                    axes[3].set_xlabel("Significance (σ)")
-                    axes[3].set_title("Distribution")
-                    axes[3].legend()
+                # Save difference image
+                diff_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_diff.fits"
+                hdu_diff = fits.PrimaryHDU(diff.astype(np.float32))
+                hdu_diff.header["SN_NAME"] = sn_name
+                hdu_diff.header["MISSION"] = mission_name
+                hdu_diff.header["FILTER"] = filter_name
+                hdu_diff.header["REF_DATE"] = result.ref_date
+                hdu_diff.header["SCI_DATE"] = result.sci_date
+                hdu_diff.header["OVERLAP"] = result.overlap_fraction
+                hdu_diff.header["SIG_MAX"] = result.sig_max
+                if result.sn_pixel:
+                    hdu_diff.header["SN_X"] = result.sn_pixel[0]
+                    hdu_diff.header["SN_Y"] = result.sn_pixel[1]
+                hdu_diff.writeto(diff_file, overwrite=True)
 
-                    plt.tight_layout()
-                    plt.savefig(
-                        sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_viz.png", dpi=150
-                    )
-                    plt.close(fig)
-                    plt.clf()
-                    del fig, axes
+                # Save significance map
+                sig_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_sig.fits"
+                hdu_sig = fits.PrimaryHDU(sig.astype(np.float32))
+                hdu_sig.header["SN_NAME"] = sn_name
+                hdu_sig.header["MISSION"] = mission_name
+                hdu_sig.header["FILTER"] = filter_name
+                hdu_sig.writeto(sig_file, overwrite=True)
 
-                except Exception as e:
-                    logger.warning(f"  Visualization failed: {e}")
+                # Save mask
+                mask_file = sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_mask.fits"
+                hdu_mask = fits.PrimaryHDU(mask.astype(np.float32))
+                hdu_mask.header["SN_NAME"] = sn_name
+                hdu_mask.header["MISSION"] = mission_name
+                hdu_mask.header["FILTER"] = filter_name
+                hdu_mask.writeto(mask_file, overwrite=True)
 
-            # Clean up memory after each SN
-            del diff, sig, mask, result
-            gc.collect()
+                # Update result with file paths
+                result.difference_file = str(diff_file.relative_to(output_dir))
+                result.significance_file = str(sig_file.relative_to(output_dir))
+                result.mask_file = str(mask_file.relative_to(output_dir))
 
-        except Exception as e:
-            logger.error(f"  Processing failed: {e}")
-            import traceback
+                results.append(asdict(result))
 
-            traceback.print_exc()
-            # Clean up on error too
-            gc.collect()
+                logger.info(f"  Saved: {diff_file.name}")
+
+                # Visualization
+                if args.visualize:
+                    try:
+                        import matplotlib
+                        matplotlib.use('Agg')  # Use non-interactive backend
+                        import matplotlib.pyplot as plt
+
+                        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+                        fig.suptitle(f"SN {sn_name} ({filter_name})")
+
+                        # Difference
+                        vmax = np.nanpercentile(np.abs(diff), 99)
+                        axes[0].imshow(
+                            diff, origin="lower", cmap="RdBu_r", vmin=-vmax, vmax=vmax
+                        )
+                        axes[0].set_title("Difference")
+
+                        # Significance
+                        vmax_sig = min(np.nanpercentile(np.abs(sig), 99), 15)
+                        axes[1].imshow(
+                            sig,
+                            origin="lower",
+                            cmap="RdBu_r",
+                            vmin=-vmax_sig,
+                            vmax=vmax_sig,
+                        )
+                        axes[1].set_title(f"Significance (max={result.sig_max:.1f}σ)")
+
+                        # Mask
+                        axes[2].imshow(mask, origin="lower", cmap="gray")
+                        axes[2].set_title("SN Mask")
+
+                        # Mark SN position with gap-centered crosshair
+                        if result.sn_pixel:
+                            px, py = result.sn_pixel[0], result.sn_pixel[1]
+                            gap, arm, color, lw = 3, 10, "lime", 2
+                            for ax in axes[:3]:
+                                ax.plot([px - arm, px - gap], [py, py], color=color, lw=lw)
+                                ax.plot([px + gap, px + arm], [py, py], color=color, lw=lw)
+                                ax.plot([px, px], [py - arm, py - gap], color=color, lw=lw)
+                                ax.plot([px, px], [py + gap, py + arm], color=color, lw=lw)
+
+                        # Histogram
+                        valid = sig[np.isfinite(sig)]
+                        axes[3].hist(
+                            valid.flatten(), bins=100, range=(-10, 10), density=True
+                        )
+                        axes[3].axvline(5, color="r", linestyle="--", label="5σ")
+                        axes[3].set_xlabel("Significance (σ)")
+                        axes[3].set_title("Distribution")
+                        axes[3].legend()
+
+                        plt.tight_layout()
+                        plt.savefig(
+                            sn_output_dir / f"{sn_name}_{mission_name}_{filter_name}_viz.png", dpi=150
+                        )
+                        plt.close(fig)
+                        plt.clf()
+                        del fig, axes
+
+                    except Exception as e:
+                        logger.warning(f"  Visualization failed: {e}")
+
+                # Clean up memory after each pair
+                del diff, sig, mask, result
+                gc.collect()
+
+            except Exception as e:
+                logger.error(f"  Processing failed: {e}")
+                import traceback
+
+                traceback.print_exc()
+                # Clean up on error too
+                gc.collect()
 
         # Force garbage collection after each batch
         if idx % args.batch_size == 0:
@@ -477,7 +555,7 @@ def main():
     for r in results:
         # Extract mission from difference_file path
         mission = "UNKNOWN"
-        for m in ["SWIFT", "GALEX", "PS1"]:
+        for m in ["SWIFT", "GALEX", "PS1", "HST"]:
             if m in r.get("difference_file", ""):
                 mission = m
                 break
