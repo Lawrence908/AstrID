@@ -21,40 +21,41 @@ def setup_logging() -> None:
 
     # Use LOG_DIR environment variable or default to "logs"
     log_dir = os.getenv("LOG_DIR", "logs")
-
-    # Create logs directory if it doesn't exist
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    log_path = os.path.join(log_dir, "app.log")
 
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(LOG_LEVEL)
 
-    # File handler with rotation
-    file_handler = RotatingFileHandler(
-        os.path.join(log_dir, "app.log"),
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(LOG_LEVEL)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # Console handler
+    # Console handler (always used)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(LOG_LEVEL)
-    console_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    )
+    console_handler.setFormatter(formatter)
 
     # Remove any existing handlers to avoid duplicates
     root_logger.handlers.clear()
-
-    # Add handlers
-    root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+
+    # File handler with rotation (optional: skip if not writable, e.g. in Docker)
+    try:
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(LOG_LEVEL)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+    except (PermissionError, OSError):
+        # Log dir not writable (e.g. container volume permissions); use console only
+        pass
 
     # Set propagate=True for all loggers
     for name in logging.root.manager.loggerDict:
