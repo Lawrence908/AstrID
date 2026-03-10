@@ -4,6 +4,8 @@
 
 AstrID follows a **Domain-Driven Design (DDD)** approach with a clean separation between business logic and infrastructure concerns. The system is built around bounded contexts that represent different areas of astronomical data processing.
 
+> **Note**: For design principles and rationale, see [`design-overview.md`](design-overview.md). For technology choices, see [`tech-stack.md`](tech-stack.md).
+
 ## High-Level Architecture
 
 ```

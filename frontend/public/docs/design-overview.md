@@ -67,35 +67,14 @@ External Surveys → Observation Ingestion → Preprocessing → Differencing �
 
 ## Technology Stack
 
-### Backend
-- **Python 3.11+**: Core language
-- **FastAPI**: Web framework and API
-- **SQLAlchemy 2**: Modern async ORM
-- **PostgreSQL**: Primary database
-- **Redis**: Message broker and caching
-- **Dramatiq**: Background task processing
-- **Prefect**: Workflow orchestration
+> **Note**: For detailed technology stack information, see [`tech-stack.md`](tech-stack.md).
 
-### ML/AI
-- **TensorFlow/Keras**: Deep learning framework
-- **MLflow**: Experiment tracking and model registry
-- **DVC**: Data version control
-- **U-Net**: Segmentation model for anomaly detection
-
-### Storage
-- **Cloudflare R2**: S3-compatible object storage
-- **Content Addressing**: Hash-based file naming for deduplication
-- **FITS**: Standard astronomical file format
-
-### Frontend
-- **Next.js**: React framework
-- **Tailwind CSS**: Styling
-- **TypeScript**: Type safety
-
-### External Services
-- **MAST API**: Hubble and JWST observations
-- **SkyView**: Multi-wavelength survey images
-- **Astronomical Catalogs**: Source cross-referencing
+**Key Technologies:**
+- **Backend**: Python 3.11+, FastAPI, SQLAlchemy 2, PostgreSQL, Redis, Dramatiq, Prefect
+- **ML/AI**: TensorFlow/Keras, MLflow, DVC, U-Net
+- **Storage**: Cloudflare R2 (S3-compatible), Content-addressable storage
+- **Frontend**: Next.js, Tailwind CSS, TypeScript
+- **External Services**: MAST API, SkyView, Astronomical Catalogs
 
 ## Domain Structure
 
@@ -252,8 +231,9 @@ External Surveys → Observation Ingestion → Preprocessing → Differencing �
 
 ## Resources
 
+- **Architecture Overview**: [`architecture.md`](architecture.md) - System structure and components
+- **Technology Stack**: [`tech-stack.md`](tech-stack.md) - Detailed technology choices
+- **File Structure**: [`file-structure.md`](file-structure.md) - Repository layout
+- **Database Schema**: [`database-schema-design.md`](database-schema-design.md) - Database design
 - **Architecture Diagrams**: `docs/diagrams/`
-- **Database Models**: `docs/consolidated-models.py`
-- **Linear Tickets**: `docs/linear-tickets.md`
-- **Technical Stack**: `docs/tech-stack.md`
-- **Migration Strategy**: `docs/migration-strategy.md`
+- **Development Guide**: [`development.md`](development.md) - Setup and workflows
