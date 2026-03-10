@@ -17,7 +17,7 @@ package "Observations Domain" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity Observation {
         * id : UUID
         * survey_id : UUID
@@ -82,7 +82,7 @@ package "Differencing Domain" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity Candidate {
         * id : UUID
         * difference_run_id : UUID
@@ -128,7 +128,7 @@ package "Detection Domain" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity ModelRun {
         * id : UUID
         * model_id : UUID
@@ -147,7 +147,7 @@ package "Detection Domain" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity Detection {
         * id : UUID
         * model_run_id : UUID
@@ -185,7 +185,7 @@ package "Curation Domain" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity Alert {
         * id : UUID
         * detection_id : UUID
@@ -213,7 +213,7 @@ package "System Tables" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity ProcessingJob {
         * id : UUID
         * job_type : String(50)
@@ -233,7 +233,7 @@ package "System Tables" {
         created_at : DateTime
         updated_at : DateTime
     }
-
+    
     entity AuditLog {
         * id : UUID
         * entity_type : String(50)

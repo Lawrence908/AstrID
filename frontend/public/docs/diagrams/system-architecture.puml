@@ -24,31 +24,31 @@ package "Domain Services Layer" {
         [Observation Service] as ObsService
         [Survey Integration] as SurveyInt
     }
-
+    
     package "Preprocessing Domain" {
         [Preprocessing Service] as PreprocessService
         [Calibration Engine] as Calibration
         [WCS Handler] as WCS
     }
-
+    
     package "Differencing Domain" {
         [Differencing Service] as DiffService
         [ZOGY Algorithm] as ZOGY
         [Source Extraction] as SourceExt
     }
-
+    
     package "Detection Domain" {
         [Detection Service] as DetectionService
         [U-Net Model] as UNet
         [Anomaly Detection] as AnomalyDet
     }
-
+    
     package "Curation Domain" {
         [Validation Service] as ValidationService
         [Human Interface] as HumanUI
         [Alert System] as Alerts
     }
-
+    
     package "Catalog Domain" {
         [Catalog Service] as CatalogService
         [Analytics Engine] as Analytics
@@ -62,13 +62,13 @@ package "Infrastructure Layer" {
         [Cloudflare R2] as R2
         [Content Addressing] as CAS
     }
-
+    
     package "Message Queue" {
         [Redis] as Redis
         [Dramatiq Workers] as Workers
         [Prefect Flows] as Prefect
     }
-
+    
     package "ML Infrastructure" {
         [MLflow] as MLflow
         [Model Registry] as ModelReg

@@ -8,11 +8,21 @@ title AstrID Data Flow Pipeline
 
 start
 
+:Supernova Catalog;
+note right: sncat_latest_view.txt
+
+:Query MAST for SN Observations;
+note right: Reference (before) + Science (after)
+
+:Download FITS Files;
+note right: Store locally
+
 :External Survey APIs;
 note right: MAST, SkyView, etc.
 
 :Observation Ingestion;
 note right: ASTR-74: Survey Integration
+note right: SN Catalog Workflow
 
 :Store Raw FITS;
 note right: Cloudflare R2 Storage
@@ -43,8 +53,13 @@ note right: R2 Storage
 note right: Dramatiq Worker
 
 if (Reference image exists?) then (yes)
-  :Select Reference Image;
-  note right: Historical survey data
+  if (SN catalog reference?) then (yes)
+    :Use SN Catalog Reference;
+    note right: Pre-discovery image
+  else (no)
+    :Select Reference Image;
+    note right: Historical survey data
+  endif
 else (no)
   :Fetch reference from SkyView;
 endif
