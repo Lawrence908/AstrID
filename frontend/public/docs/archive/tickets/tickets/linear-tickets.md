@@ -456,6 +456,22 @@
   - [x] Add API versioning
   - [x] Create API rate limiting
 
+#### ASTR-114: Real Data Ingestion Service & Worker Orchestration
+- **Project**: ASTRID-API, ASTRID-WORK, ASTRID-CORE
+- **Priority**: P2 (High)
+- **Labels**: `api`, `workflow`, `data-pipeline`, `ingestion`
+- **Estimated Time**: 3-5 days
+- **Dependencies**: ASTR-73, ASTR-76, ASTR-88, ASTR-91
+- **Description**: Implement a thin ingestion service and background worker flow that fetches real survey imagery (SkyView/MAST), stores FITS to R2, and persists Observation records and manifests for training.
+- **Status**: PLANNED
+- **Subtasks**:
+  - [ ] API: POST `/observations/ingest/position` (validate RA/Dec/FOV/survey, enqueue job)
+  - [ ] Service: `ObservationIngestionService` composing `SkyViewClient`/`MASTClient`, `FITSProcessor`, `R2StorageClient`
+  - [ ] Worker: `ingest_position_task` with retries + idempotency; store metadata and R2 keys
+  - [ ] Manifest: write minimal JSON manifest entries for training datasets
+  - [ ] Dataset Builder: extend `training/datasets/collect` to consume manifest or query by region/time
+  - [ ] Docs: update notebooks to call API endpoints (not direct clients)
+
 ### Frontend Dashboard
 
 #### ASTR-86: Next.js Dashboard Setup **COMPLETED**
