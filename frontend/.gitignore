@@ -16,6 +16,9 @@
 # production
 /build
 
+# symlinked training data (output dirs)
+/public/training-data
+
 # misc
 .DS_Store
 *.pem

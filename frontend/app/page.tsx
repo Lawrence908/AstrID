@@ -47,6 +47,15 @@ const mainSections = [
     features: ['Detection Visualization', 'Image Analysis', 'Anomaly Scoring', 'Human Validation']
   },
   {
+    id: 'training',
+    title: 'Training',
+    description: 'Browse training dataset and model performance',
+    icon: <TrendingUp className="w-8 h-8" />,
+    href: '/dashboard/training',
+    status: 'completed',
+    features: ['Training Gallery', 'Triplet Visualizations', 'Model Curves', 'Validation Placeholder']
+  },
+  {
     id: 'workflows',
     title: 'Workflows',
     description: 'Monitor processing pipelines and orchestration',

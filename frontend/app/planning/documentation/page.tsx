@@ -77,10 +77,37 @@ const documents = [
     category: 'Architecture',
     lastUpdated: '2025-09-21',
     icon: <Settings className="w-4 h-4" />
+  },
+  {
+    id: 'data-pipeline',
+    name: 'Data Pipeline',
+    file: '/docs/research/DATA_PIPELINE.md',
+    description: 'Supernova data acquisition pipeline: query, download, differencing, triplets',
+    category: 'Research',
+    lastUpdated: '2026-01',
+    icon: <BookOpen className="w-4 h-4" />
+  },
+  {
+    id: 'ml-training',
+    name: 'ML Training',
+    file: '/docs/research/TRAINING.md',
+    description: 'Real/bogus CNN training workflow, data sources, and scripts',
+    category: 'Research',
+    lastUpdated: '2026-02',
+    icon: <BookOpen className="w-4 h-4" />
+  },
+  {
+    id: 'readme',
+    name: 'Project README',
+    file: '/docs/README.md',
+    description: 'AstrID project overview, setup, and focus areas',
+    category: 'Overview',
+    lastUpdated: '2025',
+    icon: <FileText className="w-4 h-4" />
   }
 ]
 
-const categories = ['All', 'Architecture', 'Database', 'Design', 'Development', 'Project', 'Operations']
+const categories = ['All', 'Overview', 'Research', 'Architecture', 'Database', 'Design', 'Development', 'Project', 'Operations']
 
 export default function DocumentationPage() {
   const [selectedDocument, setSelectedDocument] = useState(documents[0])
@@ -142,7 +169,7 @@ export default function DocumentationPage() {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-300">8 documents available</span>
+              <span className="text-sm text-gray-300">11 documents available</span>
             </div>
             <div className="flex items-center space-x-2">
               <Calendar className="w-4 h-4 text-gray-400" />
