@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir requests
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY scripts/ ./scripts/
+RUN chmod +x /app/scripts/start_prefect_worker.sh
 RUN mkdir -p /app/logs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python -c "import prefect; print('Prefect worker healthy')" || exit 1

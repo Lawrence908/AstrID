@@ -61,6 +61,7 @@
     COPY alembic/ ./alembic/
     COPY alembic.ini ./
     COPY scripts/ ./scripts/
+    RUN chmod +x /app/scripts/start_prefect_worker.sh
 
     # Create logs directory
     RUN mkdir -p /app/logs
