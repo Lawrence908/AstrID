@@ -276,22 +276,33 @@ The original differencing step produced **one** difference image per supernova (
 7. **Quality filter**: `filter_triplet_npz_quality.py --input-dir .../training_triplets --output-dir .../training_triplets_quality` (removes constant/void/band cutouts; see TRAINING.md workflow).
 8. **Augment**: `augment_triplet_npz.py --input-dir .../training_triplets_quality --output-dir .../training_triplets_quality_aug --visualize` → ~6× samples (original + 3 rotations + 2 flips).
 
-**Expected yield (plan)**:
-- **Difference images**: ~3–4× more than "one per SN" (e.g. 354 → 1,000+ with all-filter; HST adds more).
-- **Triplets**: Before quality filter, ~2,500–3,500; after quality filter, ~2,000–3,000; after 6× augmentation, **~12,000–18,000 samples** (vs previous best ~408 unaugmented full_catalog triplets, or ~1,866 best_yield augmented).
-- Exact numbers will be filled in once the full pipeline run completes.
+**Actual yield (March 2026)**:
+- **Difference images**: All same-mission same-filter pairs per SN (via `--all-filters`); 103 SNe produced triplets (274 failed or skipped).
+- **Triplets**: After quality filter, **188 samples** (100 real, 88 bogus); quality filter removed 0. After 6× augmentation: **1,128 samples** (600 real, 528 bogus).
+- Paths: `output/datasets/full_catalog/training_triplets_quality` (no aug), `training_triplets_quality_aug` (aug). See [TRAINING.md](../TRAINING.md) run log runs 7–8.
 
 ### 7.3 Relation to DATA_PIPELINE and TRAINING
 
 - **DATA_PIPELINE.md**: Stages 1–5 (query → filter → download → organize → differencing) and "Training triplets and cutout quality" (create_training_triplets, is_usable_cutout, filter_triplet_npz_quality). Same-mission and same-filter requirements are unchanged; the only change is emitting all matching filter pairs in Stage 5 instead of one per SN.
 - **TRAINING.md**: Training workflow (build triplets → optional quality filter → optional curation → optional augmentation → train → evaluate). The full_catalog dataset will be added as a data source; training run log will be updated with runs using `training_triplets_quality_aug` (or a curated subset) once the pipeline finishes and training is executed.
 
-### 7.4 Next: Enough or Relax to All-Mission/All-Filter?
+### 7.4 Training results (March 2026)
 
-Once the full-catalog run completes:
-- **Update this section** with actual counts: number of difference images, triplets before/after quality filter, and after augmentation.
-- **Train** using `output/datasets/full_catalog/training_triplets_quality_aug` (or a chosen subset) and record val AUCPR and overfitting indicators in TRAINING.md.
-- **Decide**: If sample count and generalization are sufficient, document that in these notes. If not, the next step is to consider **cross-mission / cross-filter** pairing (relax same-mission and same-filter; rely on quality filtering and possibly stronger augmentation to handle noisier pairs). That would be a separate pipeline change (e.g. `require_same_mission: false`, differencing logic that pairs any ref with any sci) and would be documented here and in DATA_PIPELINE.
+Two training runs were completed and documented in [TRAINING.md](../TRAINING.md) (runs 7–8):
+
+| Config | Samples | Best val AUCPR | Notes |
+|--------|---------|----------------|------|
+| No augmentation | 188 (100 real, 88 bogus) | **0.910** | Early stop ~epoch 41; small-N warning; more realistic baseline. |
+| With augmentation | 1,128 (600 real, 528 bogus) | **0.968** | Early stop ~epoch 61; best current reference. |
+
+**Recommended checkpoint**: `output/models/real_bogus_cnn_full_aug/best.pt`. Save this for reference and for holdout evaluation.
+
+### 7.5 Next steps
+
+- **Holdout evaluation**: Run `evaluate_real_bogus_cnn.py` with `best.pt` on a different triplet dir (e.g. a held-out set of SNe or another survey) to measure generalization.
+- **More data**: To reduce variance and improve robustness, add more SNe to the pipeline (e.g. fix failed differencing, expand catalog, or relax filters cautiously) and re-run triplets → quality → aug → train.
+- **Light regularization**: Optionally try weight decay in `train_real_bogus_cnn.py` to reduce overfitting on future larger runs.
+- **Decide on scale**: If 0.968 and holdout performance are sufficient, document as baseline for production. If not, consider cross-mission/cross-filter pairing (separate pipeline change; see original 7.4 for rationale).
 
 ---
 

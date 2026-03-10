@@ -2,8 +2,8 @@
 
 ## Technical Documentation
 
-**Version**: 1.0  
-**Date**: February 2026  
+**Version**: 1.1  
+**Date**: March 2026  
 **Author**: Chris Lawrence
 
 ---
@@ -56,6 +56,8 @@ flowchart LR
 | `output/datasets/best_yield/training_triplets_aug` | Same, with 6× augmentation (~1866 samples). |
 | `output/datasets/best_yield/training_triplets_quality` | Quality-filtered (no constant/void/band cutouts). |
 | `output/datasets/best_yield/training_triplets_curated` | Hand-curated keys from `curated.txt` (real + bogus per key). |
+| `output/datasets/full_catalog/training_triplets_quality` | Full-catalog pipeline: quality-filtered only (100 real, 88 bogus = 188). |
+| `output/datasets/full_catalog/training_triplets_quality_aug` | Same, with 6× augmentation (600 real, 528 bogus = 1,128). |
 
 ### Scripts
 
@@ -92,9 +94,13 @@ Summary of runs for reporting. Best val AUCPR and dataset/settings are the main 
 | 4 | best_yield/training_triplets_quality + aug | — | Yes | **0.90** | Quality-filtered + augmentation. |
 | 5 | best_yield/training_triplets_curated | 36 / 30 (66) | No | **0.968** | Hand-curated keys only; small N, high variance warning. |
 | 6 | best_yield/training_triplets_curated_aug | 216 / 180 (396) | Yes (6×) | **1.000** | Augmented curated set; likely overfitting, limited variation—tracking for comparison. |
+| 7 | full_catalog/training_triplets_quality | 100 / 88 (188) | No | **0.910** | Full-catalog pipeline, quality-only; trainer warned small N → high variance; best at epoch 26, early stop 41. More realistic than earlier high numbers. |
+| 8 | full_catalog/training_triplets_quality_aug | 600 / 528 (1,128) | Yes (6×) | **0.968** | Same source, 6× aug; best at epoch 46, early stop 61. Best current estimate of generalization on this dataset. |
 
 - Run 5 used `curated.txt` (keys only) and `filter_triplet_npz_by_list.py` with `--copy-visualizations`. Best checkpoint at epoch 2 (early stop by epoch 17). With 66 samples, val metrics are noisy; AUCPR 0.968 is strong but should be confirmed on a holdout or more data.
 - Run 6: augmented curated (same 46 keys × 6 augment → 396 samples). Best val AUCPR 1.000 at epoch 14; early stop at 29. Val set is small and drawn from same keys, so 1.000 is likely overfitting / memorization rather than true generalization—useful to track for reporting.
+- **Run 7 (full_catalog, no aug)**: 188 samples (100 real, 88 bogus) from 103 SNe; quality filter removed 0. Val AUCPR 0.910 is a more trustworthy baseline than earlier small-set runs; script warned about high variance on this size.
+- **Run 8 (full_catalog, aug)**: 1,128 samples (6× augmentation). Val AUCPR 0.968 with stable metrics (e.g. P≈0.93, R≈0.83, F1≈0.88 at best). Recommended checkpoint for downstream use: `output/models/real_bogus_cnn_full_aug/best.pt`.
 
 ---
 
@@ -106,7 +112,38 @@ Summary of runs for reporting. Best val AUCPR and dataset/settings are the main 
 - **Inference on new triplets**: Add or use a small script that loads `best.pt`, loads a single NPZ or a directory of triplets, runs the model, and writes scores (and optionally a CSV or JSON). That gives you “can it identify change?” on arbitrary new cutouts.
 - **Qualitative check**: Run the evaluator on the curated set and inspect the confusion matrix and any misclassified samples to see if errors are interpretable (e.g. borderline cases, artifacts).
 
-### 2. Hook training into MLflow and infrastructure
+### 2. Prediction visualization
+
+**Script**: `scripts/visualize_real_bogus_predictions.py` — loads a checkpoint, runs inference on a triplet dir, and writes 3-panel PNGs (reference, science, difference) with **true label**, **P(real)**, and ✓/✗ (correct/wrong). Also writes `predictions.json` (per-sample path, true_label, pred_prob, correct) for a frontend gallery.
+
+**Examples**:
+```bash
+# Holdout (e.g. sn2014j), up to 100 samples
+python scripts/visualize_real_bogus_predictions.py \
+  --checkpoint output/models/real_bogus_cnn_full_aug/best.pt \
+  --triplet-dir output/datasets/sn2014j/training_triplets_aug \
+  --output-dir output/predictions_viz/sn2014j_aug --max-samples 100
+
+# Validation split only (same as evaluator), e.g. for dashboard
+python scripts/visualize_real_bogus_predictions.py \
+  --checkpoint output/models/real_bogus_cnn_full_aug/best.pt \
+  --triplet-dir output/datasets/full_catalog/training_triplets_quality_aug \
+  --output-dir output/predictions_viz/full_catalog_val --val-only --max-samples 200
+```
+
+**Frontend**: The dashboard Training → Performance page has a “Validation predictions” section that looks for images under `/training-data/validation/`. Symlink the script output so those PNGs are served:
+```bash
+ln -snf "$(realpath output/predictions_viz/full_catalog_val)" frontend/public/training-data/validation
+```
+The page currently shows a placeholder; when the gallery is implemented it can list PNGs from that path (or read `predictions.json` for captions). The same script works for “live” batch runs: point `--triplet-dir` at any triplet dataset (e.g. from a production pipeline) and `--output-dir` to a run-specific folder; then expose that folder or its JSON for the frontend.
+
+### 3. Live testing: MLflow + Prefect + frontend
+
+- **MLflow**: Register the current best checkpoint (e.g. `best.pt`) as a PyTorch model so it’s versioned and deployable. The app’s `ModelInferenceService` is currently U-Net/Keras; adding a real/bogus path would mean loading from MLflow by name/version or from a local path for this model.
+- **Prefect**: Add a flow (e.g. `evaluate_real_bogus_cnn_flow`) that (1) runs `evaluate_real_bogus_cnn.py` on a chosen triplet dir, (2) runs `visualize_real_bogus_predictions.py`, (3) logs metrics and the prediction-artifact dir to MLflow. That gives “live” visibility in the Prefect UI and a repeatable evaluation + viz pipeline.
+- **Frontend**: Use the prediction viz script output (symlink or API that serves `predictions.json` + images) so the Training dashboard shows real/bogus prediction galleries. Optionally add a dedicated “Real/bogus predictions” page that lists runs and lets you drill into a run’s PNGs and metrics.
+
+### 4. Hook training into MLflow and infrastructure
 
 Existing pieces:
 
@@ -132,4 +169,9 @@ Concrete steps:
 
 ---
 
-*Document updated from training runs and pipeline usage — February 2026*
+*Document updated from training runs and pipeline usage — March 2026*
+
+### Recommended checkpoint (full-catalog)
+
+For evaluation and downstream use, use **Run 8** checkpoint:  
+`output/models/real_bogus_cnn_full_aug/best.pt` (val AUCPR 0.968, 1,128 samples, 6× augmentation).
