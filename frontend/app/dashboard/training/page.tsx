@@ -43,7 +43,7 @@ interface TripletMeta {
   sig_max?: number
 }
 
-type TabKind = 'original' | 'augmented'
+type TabKind = 'original' | 'augmented' | 'predictions'
 
 interface GalleryItem {
   id: string
@@ -53,6 +53,25 @@ interface GalleryItem {
   mission?: string
   filter?: string
   meta?: TripletMeta
+  /** From predictions.json: model prediction and correctness */
+  predProb?: number
+  correct?: boolean
+}
+
+interface PredictionSample {
+  path: string
+  true_label: number
+  pred_prob: number
+  correct: boolean
+}
+
+interface PredictionsData {
+  checkpoint?: string
+  triplet_dir?: string
+  val_only?: boolean
+  n_rendered: number
+  n_total: number
+  samples: PredictionSample[]
 }
 
 function buildOriginalItems(
@@ -119,6 +138,7 @@ export default function TrainingPage() {
   const [augmentedSummary, setAugmentedSummary] = useState<Summary | null>(null)
   const [realMeta, setRealMeta] = useState<TripletMeta[]>([])
   const [bogusMeta, setBogusMeta] = useState<TripletMeta[]>([])
+  const [predictionsData, setPredictionsData] = useState<PredictionsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -129,19 +149,26 @@ export default function TrainingPage() {
       try {
         setLoading(true)
         setError(null)
-        const [tripletsRes, augRes, realRes, bogusRes] = await Promise.all([
+        const [tripletsRes, augRes, realRes, bogusRes, predRes] = await Promise.all([
           fetch(`${BASE}/triplets-summary.json`),
           fetch(`${BASE}/augmented-summary.json`),
           fetch(`${BASE}/real-metadata.json`),
-          fetch(`${BASE}/bogus-metadata.json`)
+          fetch(`${BASE}/bogus-metadata.json`),
+          fetch(`${BASE}/validation/predictions.json`)
         ])
-        if (!tripletsRes.ok || !augRes.ok || !realRes.ok || !bogusRes.ok) {
-          throw new Error('Failed to load training data')
-        }
-        setTripletsSummary(await tripletsRes.json())
-        setAugmentedSummary(await augRes.json())
-        setRealMeta(await realRes.json())
-        setBogusMeta(await bogusRes.json())
+        if (tripletsRes.ok) setTripletsSummary(await tripletsRes.json())
+        else setTripletsSummary(null)
+        if (augRes.ok) setAugmentedSummary(await augRes.json())
+        else setAugmentedSummary(null)
+        if (realRes.ok) setRealMeta(await realRes.json())
+        else setRealMeta([])
+        if (bogusRes.ok) setBogusMeta(await bogusRes.json())
+        else setBogusMeta([])
+        if (predRes.ok) {
+          const data = await predRes.json()
+          if (data?.samples?.length) setPredictionsData(data)
+          else setPredictionsData(null)
+        } else setPredictionsData(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load training data')
       } finally {
@@ -160,6 +187,18 @@ export default function TrainingPage() {
     const b = augmentedSummary?.bogus_samples ?? 0
     return buildAugmentedItems(r, b)
   }, [augmentedSummary])
+
+  const allPredictions = useMemo((): GalleryItem[] => {
+    if (!predictionsData?.samples?.length) return []
+    const validationBase = `${BASE}/validation`
+    return predictionsData.samples.map((s, i) => ({
+      id: `pred-${i}`,
+      imagePath: `${validationBase}/${s.path}`,
+      label: s.true_label === 1 ? 'real' : 'bogus',
+      predProb: s.pred_prob,
+      correct: s.correct
+    }))
+  }, [predictionsData])
 
   const missions = useMemo(() => {
     const set = new Set<string>()
@@ -183,7 +222,18 @@ export default function TrainingPage() {
     })
   }, [allAugmented, filterLabel])
 
-  const items = tab === 'original' ? filteredOriginal : filteredAugmented
+  const filteredPredictions = useMemo(() => {
+    return allPredictions.filter((item) => {
+      if (filterLabel !== 'all' && item.label !== filterLabel) return false
+      return true
+    })
+  }, [allPredictions, filterLabel])
+
+  const items = tab === 'original'
+    ? filteredOriginal
+    : tab === 'augmented'
+      ? filteredAugmented
+      : filteredPredictions
   const totalPages = Math.max(1, Math.ceil(items.length / PER_PAGE))
   const currentPage = Math.min(page, totalPages - 1)
   const paginatedItems = items.slice(currentPage * PER_PAGE, (currentPage + 1) * PER_PAGE)
@@ -192,11 +242,22 @@ export default function TrainingPage() {
     setPage(0)
   }, [tab, filterLabel, missionFilter, searchSn])
 
-  const summary = tab === 'original' ? tripletsSummary : augmentedSummary
-  const totalSamples = summary?.total_samples ?? 0
-  const realSamples = summary?.real_samples ?? 0
-  const bogusSamples = summary?.bogus_samples ?? 0
+  const summary = tab === 'original'
+    ? tripletsSummary
+    : tab === 'augmented'
+      ? augmentedSummary
+      : null
+  const totalSamples = tab === 'predictions'
+    ? (predictionsData?.n_rendered ?? 0)
+    : (summary?.total_samples ?? 0)
+  const realSamples = tab === 'predictions'
+    ? (predictionsData?.samples?.filter((s) => s.true_label === 1).length ?? 0)
+    : (summary?.real_samples ?? 0)
+  const bogusSamples = tab === 'predictions'
+    ? (predictionsData?.samples?.filter((s) => s.true_label === 0).length ?? 0)
+    : (summary?.bogus_samples ?? 0)
   const balanceRatio = bogusSamples && realSamples ? (bogusSamples / realSamples).toFixed(2) : '—'
+  const predictionsCorrect = predictionsData?.samples?.filter((s) => s.correct).length ?? 0
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-astrid-dark">
@@ -221,6 +282,15 @@ export default function TrainingPage() {
           <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg flex items-center gap-2 text-red-400">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {!loading && !tripletsSummary && !augmentedSummary && !predictionsData && (
+          <div className="mb-6 p-4 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-sm">
+            No training metadata or predictions loaded. For the triplet gallery, add summary and metadata JSON under{' '}
+            <code className="bg-gray-700 px-1 rounded">public/training-data/</code>. For the Predictions tab, run{' '}
+            <code className="bg-gray-700 px-1 rounded">visualize_real_bogus_predictions.py</code> and symlink its output to{' '}
+            <code className="bg-gray-700 px-1 rounded">public/training-data/validation</code>.
           </div>
         )}
 
@@ -263,9 +333,15 @@ export default function TrainingPage() {
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-400">SNe processed / failed</p>
+                <p className="text-sm font-medium text-gray-400">
+                  {tab === 'predictions' ? 'Correct (predicted)' : 'SNe processed / failed'}
+                </p>
                 <p className="text-2xl font-bold text-white">
-                  {loading ? '—' : `${tripletsSummary?.processed ?? 0} / ${tripletsSummary?.failed ?? 0}`}
+                  {loading
+                    ? '—'
+                    : tab === 'predictions'
+                      ? `${predictionsCorrect} / ${totalSamples}`
+                      : `${tripletsSummary?.processed ?? 0} / ${tripletsSummary?.failed ?? 0}`}
                 </p>
               </div>
               <Target className="w-8 h-8 text-gray-400" />
@@ -294,6 +370,16 @@ export default function TrainingPage() {
               }`}
             >
               Augmented ({augmentedSummary?.total_samples ?? 0})
+            </button>
+            <button
+              onClick={() => setTab('predictions')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                tab === 'predictions'
+                  ? 'bg-astrid-blue text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              Predictions ({predictionsData?.n_rendered ?? 0})
             </button>
           </div>
 
@@ -367,10 +453,22 @@ export default function TrainingPage() {
                     >
                       {item.label}
                     </span>
+                    {item.predProb != null && (
+                      <>
+                        <span
+                          className={`absolute bottom-2 left-2 px-2 py-0.5 text-xs font-medium rounded ${
+                            item.correct ? 'bg-green-900/90 text-green-300' : 'bg-red-900/90 text-red-300'
+                          }`}
+                        >
+                          {item.correct ? '✓' : '✗'} P(real)={(item.predProb * 100).toFixed(0)}%
+                        </span>
+                      </>
+                    )}
                   </div>
                   <div className="p-2 text-xs text-gray-300 truncate">
                     {item.snName ?? item.id}
                     {item.mission && ` · ${item.mission} ${item.filter}`}
+                    {item.predProb != null && ` · P(real)=${(item.predProb * 100).toFixed(0)}%`}
                   </div>
                 </button>
               ))}
@@ -422,6 +520,14 @@ export default function TrainingPage() {
                 alt={selectedItem.snName ?? selectedItem.id}
                 className="w-full rounded-lg mb-4"
               />
+              {selectedItem.predProb != null && (
+                <div className="mb-4 flex items-center gap-2">
+                  <span className={`px-2 py-1 text-sm font-medium rounded ${selectedItem.correct ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
+                    {selectedItem.correct ? '✓ Correct' : '✗ Wrong'}
+                  </span>
+                  <span className="text-gray-400">P(real) = {(selectedItem.predProb * 100).toFixed(1)}%</span>
+                </div>
+              )}
               {selectedItem.meta && (
                 <dl className="grid grid-cols-2 gap-2 text-sm">
                   <dt className="text-gray-500">Center (x, y)</dt>

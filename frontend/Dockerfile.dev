@@ -21,6 +21,13 @@ COPY app/ ./app/
 COPY components/ ./components/
 COPY public/ ./public/
 
+# Ensure training-data placeholder JSONs exist so /training-data/*.json return 200 (page handles empty data)
+RUN mkdir -p /app/public/training-data && \
+  echo '{"total_sne":0,"processed":0,"failed":0,"real_samples":0,"bogus_samples":0,"total_samples":0}' > /app/public/training-data/triplets-summary.json && \
+  echo '{"total_sne":0,"processed":0,"failed":0,"real_samples":0,"bogus_samples":0,"total_samples":0}' > /app/public/training-data/augmented-summary.json && \
+  echo '[]' > /app/public/training-data/real-metadata.json && \
+  echo '[]' > /app/public/training-data/bogus-metadata.json
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
