@@ -49,6 +49,8 @@ services:
       - AWS_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=auto
+      # Allow Host header when accessing via Tailscale/organizr (default: localhost only)
+      - MLFLOW_SERVER_ALLOWED_HOSTS=${MLFLOW_SERVER_ALLOWED_HOSTS:-localhost,localhost:5000,localhost:9003,daedalus.sunfish-prometheus.ts.net,daedalus.sunfish-prometheus.ts.net:9003}
     ports:
       - "9003:5000"
     volumes:

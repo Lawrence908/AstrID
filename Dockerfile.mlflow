@@ -18,4 +18,6 @@ RUN mkdir -p /app/logs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${MLFLOW_PORT}/health || exit 1
 
-CMD ["bash", "-lc", "mlflow server --host 0.0.0.0 --port ${MLFLOW_PORT} --backend-store-uri ${MLFLOW_BACKEND_URI} --gunicorn-opts '--timeout 60 --workers 1 --worker-class sync --max-requests 100 --max-requests-jitter 10'"]
+# Use default uvicorn (no --gunicorn-opts) so --allowed-hosts and security middleware work.
+# MLFLOW_SERVER_ALLOWED_HOSTS is set in compose for Tailscale/organizr access.
+CMD ["bash", "-c", "mlflow server --host 0.0.0.0 --port ${MLFLOW_PORT} --backend-store-uri ${MLFLOW_BACKEND_URI} --allowed-hosts \"${MLFLOW_SERVER_ALLOWED_HOSTS:-*}\""]
