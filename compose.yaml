@@ -77,7 +77,10 @@ services:
     env_file:
       - .env
     environment:
-      - PREFECT_API_URL=http://localhost:9004/api
+      # API URL used by server/workers (localhost from host, or use PREFECT_UI_API_URL for UI).
+      - PREFECT_API_URL=${PREFECT_API_URL:-http://localhost:9004/api}
+      # UI uses this in the browser; relative /api works when accessing via any host (e.g. 192.168.50.128:9004).
+      - PREFECT_UI_API_URL=${PREFECT_UI_API_URL:-/api}
       - PREFECT_SERVER_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres.${PREFECT_SUPABASE_PROJECT_REF}:${PREFECT_SUPABASE_PASSWORD}@${PREFECT_SUPABASE_HOST}/postgres?timeout=10
       - PREFECT_SUPABASE_PROJECT_REF=${PREFECT_SUPABASE_PROJECT_REF}
       - PREFECT_SUPABASE_PASSWORD=${PREFECT_SUPABASE_PASSWORD}
